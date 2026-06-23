@@ -1,0 +1,65 @@
+# Core Framework
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.23
+psycopg[binary]
+alembic==1.13.0
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+
+# Caching & Sessions
+redis==5.0.1
+
+# Machine Learning
+numpy==1.26.2
+pandas==2.1.3
+scikit-learn==1.3.2
+xgboost==2.0.3
+prophet==1.1.5
+
+# AI & LLM
+langchain==0.1.0
+langgraph==0.0.23
+openai==1.3.8
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+httpx==0.25.2
+aiofiles==23.2.1
+
+# PDF Generation
+reportlab==4.0.7
+pypdf==3.17.1
+
+# Email
+python-multipart==0.0.6
+aiosmtplib==3.0.0
+email-validator==2.1.0
+
+# Logging & Monitoring
+structlog==23.2.0
+python-json-logger==2.0.7
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+httpx==0.25.2
+
+# Development
+black==23.12.0
+flake8==6.1.0
+mypy==1.7.1
+isort==5.13.2
+
+# Production
+gunicorn==21.2.0

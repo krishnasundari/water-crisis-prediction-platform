@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: water-crisis-db
+    environment:
+      POSTGRES_USER: water_user
+      POSTGRES_PASSWORD: water_password
+      POSTGRES_DB: water_crisis_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U water_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - water-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: water-crisis-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - water-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: water-crisis-backend
+    environment:
+      DATABASE_URL: postgresql://water_user:water_password@postgres:5432/water_crisis_db
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: your-super-secret-jwt-key-change-in-production
+      DEBUG: "False"
+      ENVIRONMENT: production
+      CORS_ORIGINS: http://localhost,http://localhost:80,http://127.0.0.1
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - water-network
+    restart: unless-stopped
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: water-crisis-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - water-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: water-crisis-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - water-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  water-network:
+    driver: bridge
