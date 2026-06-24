@@ -1,44 +1,76 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.db.database import get_db
+from app.models.models import Reservoir
+from app.schemas.schemas import ReservoirCreate
 
 router = APIRouter()
 
-# Temporary in-memory storage
-reservoirs = [
-    {
-        "id": 1,
-        "name": "Nagarjuna Sagar",
-        "capacity": 400,
-        "current_level": 280,
-        "district": "Nalgonda",
-        "state": "Telangana"
-    },
-    {
-        "id": 2,
-        "name": "Srisailam",
-        "capacity": 500,
-        "current_level": 350,
-        "district": "Kurnool",
-        "state": "Andhra Pradesh"
-    }
-]
 
 @router.get("/")
-async def list_reservoirs():
-    return reservoirs
+def list_reservoirs(db: Session = Depends(get_db)):
+    return db.query(Reservoir).all()
 
-@router.post("/")
-async def create_reservoir(reservoir: dict):
-    reservoir["id"] = len(reservoirs) + 1
-    reservoirs.append(reservoir)
-    return {
-        "message": "Reservoir created",
-        "data": reservoir
-    }
 
 @router.get("/{reservoir_id}")
-async def get_reservoir(reservoir_id: int):
-    for reservoir in reservoirs:
-        if reservoir["id"] == reservoir_id:
-            return reservoir
+def get_reservoir(
+    reservoir_id: int,
+    db: Session = Depends(get_db)
+):
+    reservoir = db.query(Reservoir).filter(
+        Reservoir.id == reservoir_id
+    ).first()
 
-    return {"error": "Reservoir not found"}
+    if not reservoir:
+        raise HTTPException(
+            status_code=404,
+            detail="Reservoir not found"
+        )
+
+    return reservoir
+
+
+@router.post("/")
+def create_reservoir(
+    reservoir: ReservoirCreate,
+    db: Session = Depends(get_db)
+):
+    new_reservoir = Reservoir(
+        name=reservoir.name,
+        capacity=reservoir.capacity,
+        current_level=reservoir.current_level,
+        district=reservoir.district,
+        state=reservoir.state,
+        latitude=reservoir.latitude,
+        longitude=reservoir.longitude,
+    )
+
+    db.add(new_reservoir)
+    db.commit()
+    db.refresh(new_reservoir)
+
+    return new_reservoir
+
+
+@router.delete("/{reservoir_id}")
+def delete_reservoir(
+    reservoir_id: int,
+    db: Session = Depends(get_db)
+):
+    reservoir = db.query(Reservoir).filter(
+        Reservoir.id == reservoir_id
+    ).first()
+
+    if not reservoir:
+        raise HTTPException(
+            status_code=404,
+            detail="Reservoir not found"
+        )
+
+    db.delete(reservoir)
+    db.commit()
+
+    return {
+        "message": "Reservoir deleted successfully"
+    }
