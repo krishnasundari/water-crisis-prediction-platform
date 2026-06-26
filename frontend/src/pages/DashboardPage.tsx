@@ -12,8 +12,11 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({
     total_villages: 0,
     total_reservoirs: 0,
+    safe_villages: 0,
+    moderate_risk_villages: 0,
     high_risk_villages: 0,
     active_alerts: 0,
+    average_risk_score: 0,
   });
 
   useEffect(() => {
@@ -32,28 +35,59 @@ export default function DashboardPage() {
       title: "Total Villages",
       value: stats.total_villages,
       icon: "🏘️",
+      color: "#1976d2",
     },
     {
       title: "Reservoirs",
       value: stats.total_reservoirs,
       icon: "💧",
+      color: "#0288d1",
     },
     {
-      title: "High Risk Villages",
+      title: "Safe",
+      value: stats.safe_villages,
+      icon: "🟢",
+      color: "#2e7d32",
+    },
+    {
+      title: "Moderate",
+      value: stats.moderate_risk_villages,
+      icon: "🟡",
+      color: "#f9a825",
+    },
+    {
+      title: "High Risk",
       value: stats.high_risk_villages,
-      icon: "⚠️",
+      icon: "🔴",
+      color: "#d32f2f",
     },
     {
-      title: "Active Alerts",
+      title: "Alerts",
       value: stats.active_alerts,
       icon: "🚨",
+      color: "#ef6c00",
+    },
+    {
+      title: "Avg Risk Score",
+      value: `${stats.average_risk_score}%`,
+      icon: "📈",
+      color: "#6a1b9a",
     },
   ];
 
   const riskData = [
-    { name: "Safe", value: 1 },
-    { name: "Moderate", value: 1 },
-    { name: "High", value: 1 },
+    {
+      name: "Safe",
+      value: stats.safe_villages,
+    },
+    {
+      name: "Moderate",
+      value: stats.moderate_risk_villages,
+    },
+    {
+      name: "High",
+      value: stats.high_risk_villages,
+    },
   ];
 
   const COLORS = ["#4caf50", "#ff9800", "#f44336"];
@@ -66,26 +100,26 @@ export default function DashboardPage() {
         style={{
           flex: 1,
           minHeight: "100vh",
-          backgroundColor: "#f5f7fa",
+          background: "#f4f6f9",
           padding: "30px",
-          fontFamily: "Arial, sans-serif",
+          fontFamily: "Arial",
         }}
       >
         <h1 style={{ color: "#1565c0" }}>
           🌊 Water Crisis Prediction & Management Platform
         </h1>
 
-        <p style={{ color: "#555" }}>
+        <p style={{ color: "#666", marginBottom: "30px" }}>
           AI Powered Water Resource Monitoring Dashboard
         </p>
 
-        {/* Stats Cards */}
+        {/* Dashboard Cards */}
+
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
+            gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))",
             gap: "20px",
-            marginTop: "30px",
           }}
         >
           {cards.map((card) => (
@@ -95,44 +129,51 @@ export default function DashboardPage() {
                 background: "white",
                 borderRadius: "12px",
                 padding: "20px",
-                boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+                boxShadow: "0 3px 10px rgba(0,0,0,0.12)",
               }}
             >
-              <h3>
+              <h3 style={{ marginBottom: "15px" }}>
                 {card.icon} {card.title}
               </h3>
 
-              <h1 style={{ color: "#1976d2" }}>{card.value}</h1>
+              <h1
+                style={{
+                  color: card.color,
+                  fontSize: "36px",
+                  margin: 0,
+                }}
+              >
+                {card.value}
+              </h1>
             </div>
           ))}
         </div>
 
-        {/* Risk Distribution Chart */}
+        {/* Risk Chart */}
+
         <div
           style={{
             marginTop: "40px",
             background: "white",
-            padding: "20px",
             borderRadius: "12px",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+            padding: "20px",
+            boxShadow: "0 3px 10px rgba(0,0,0,0.12)",
           }}
         >
           <h2>📊 Risk Distribution</h2>
 
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={350}>
             <PieChart>
               <Pie
                 data={riskData}
                 dataKey="value"
-                cx="50%"
-                cy="50%"
-                outerRadius={100}
+                outerRadius={120}
                 label
               >
                 {riskData.map((entry, index) => (
                   <Cell
                     key={index}
-                    fill={COLORS[index % COLORS.length]}
+                    fill={COLORS[index]}
                   />
                 ))}
               </Pie>
@@ -142,40 +183,65 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </div>
 
-        {/* Recent Alerts */}
+        {/* Alerts */}
+
         <div
           style={{
             marginTop: "40px",
             background: "white",
-            padding: "20px",
             borderRadius: "12px",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+            padding: "20px",
+            boxShadow: "0 3px 10px rgba(0,0,0,0.12)",
           }}
         >
           <h2>🚨 Recent Alerts</h2>
 
-          <ul>
-            <li>Village A - Water level critically low</li>
-            <li>Village B - Drought risk increased</li>
-            <li>Village C - Reservoir below 30%</li>
-          </ul>
+          {stats.active_alerts === 0 ? (
+            <p style={{ color: "green" }}>
+              ✅ No active alerts. Water resources are currently stable.
+            </p>
+          ) : (
+            <ul>
+              <li>⚠️ Active water crisis alerts detected.</li>
+            </ul>
+          )}
         </div>
 
         {/* AI Summary */}
+
         <div
           style={{
-            marginTop: "30px",
+            marginTop: "40px",
             background: "white",
-            padding: "20px",
             borderRadius: "12px",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+            padding: "20px",
+            boxShadow: "0 3px 10px rgba(0,0,0,0.12)",
           }}
         >
           <h2>🤖 AI Prediction Summary</h2>
 
-          <p>
-            Based on rainfall trends and reservoir levels, 8 villages may face
-            water shortages within the next 30 days.
+          <p style={{ lineHeight: "28px" }}>
+            📈 Average Risk Score :
+            <b> {stats.average_risk_score}%</b>
+
+            <br />
+            <br />
+
+            🔴 High Risk Villages :
+            <b> {stats.high_risk_villages}</b>
+
+            <br />
+            <br />
+
+            🟢 Safe Villages :
+            <b> {stats.safe_villages}</b>
+
+            <br />
+            <br />
+
+            The AI model recommends continuous monitoring of rainfall,
+            groundwater level and reservoir capacity for sustainable water
+            resource management.
           </p>
         </div>
       </div>
