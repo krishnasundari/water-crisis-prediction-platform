@@ -196,6 +196,12 @@ class ForecastListResponse(BaseModel):
     forecast_90d: Optional[ForecastResponse]
 
 # ============ Alert Schemas ============
+class AlertCreate(BaseModel):
+    village_id: Optional[int] = None
+    reservoir_id: Optional[int] = None
+    alert_type: str
+    severity: str
+    message: str
 
 class AlertResponse(BaseModel):
     id: int
