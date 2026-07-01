@@ -4,6 +4,7 @@ import './styles/App.css'
 import ReservoirsPage from "./pages/ReservoirsPage";
 import AlertsPage from "./pages/AlertsPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AnalyticsPage from "./pages/AnalyticsPage";
 
 // Pages
 import LoginPage from './pages/LoginPage'
@@ -83,6 +84,14 @@ function App() {
   element={
     <ProtectedRoute>
       <ReportsPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/analytics"
+  element={
+    <ProtectedRoute>
+      <AnalyticsPage />
     </ProtectedRoute>
   }
 />

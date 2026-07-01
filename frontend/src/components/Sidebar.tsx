@@ -86,6 +86,12 @@ export default function Sidebar() {
         >
           📄 Reports
         </li>
+        <li
+  style={{ cursor: "pointer", marginBottom: "12px" }}
+  onClick={() => navigate("/analytics")}
+>
+  📈 Analytics
+</li>
 
         <li
           style={{ cursor: "pointer", marginBottom: "12px" }}
