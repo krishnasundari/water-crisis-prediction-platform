@@ -1,257 +1,130 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
+import { alertAPI } from "../services/api";
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<any[]>([]);
-
-  const [newAlert, setNewAlert] = useState({
-    village: "",
-    severity: "Low",
-    message: "",
+  const [alerts,setAlerts]=useState<any[]>([]);
+  const [form,setForm]=useState({
+    village_id:"",
+    reservoir_id:"",
+    alert_type:"risk",
+    severity:"low",
+    message:""
   });
 
-  const loadAlerts = () => {
-    fetch("http://127.0.0.1:8000/api/v1/alerts/")
-      .then((res) => res.json())
-      .then((data) => setAlerts(data))
-      .catch((err) => console.error(err));
-  };
+  async function load(){
+    try{
+      const data=await alertAPI.getAll();
+      setAlerts(data);
+    }catch(e){console.error(e);}
+  }
 
-  useEffect(() => {
-    loadAlerts();
-  }, []);
+  useEffect(()=>{load();},[]);
 
-  const createAlert = async () => {
-    await fetch("http://127.0.0.1:8000/api/v1/alerts/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(newAlert),
+  async function createAlert(){
+    await fetch("http://127.0.0.1:8000/api/v1/alerts/",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        village_id: form.village_id?Number(form.village_id):null,
+        reservoir_id: form.reservoir_id?Number(form.reservoir_id):null,
+        alert_type: form.alert_type,
+        severity: form.severity,
+        message: form.message
+      })
     });
+    setForm({village_id:"",reservoir_id:"",alert_type:"risk",severity:"low",message:""});
+    load();
+  }
 
-    setNewAlert({
-      village: "",
-      severity: "Low",
-      message: "",
-    });
-
-    loadAlerts();
-  };
-
-  const markAsRead = async (id: number) => {
-    await fetch(`http://127.0.0.1:8000/api/v1/alerts/${id}/read`, {
-      method: "PUT",
-    });
-
-    loadAlerts();
-  };
-
-  const deleteAlert = async (id: number) => {
-    await fetch(`http://127.0.0.1:8000/api/v1/alerts/${id}`, {
-      method: "DELETE",
-    });
-
-    loadAlerts();
-  };
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case "Critical":
-        return "#d32f2f";
-      case "Medium":
-        return "#f9a825";
-      case "Low":
-        return "#43a047";
-      default:
-        return "#1976d2";
-    }
-  };
+  async function deleteAlert(id:number){
+    await fetch(`http://127.0.0.1:8000/api/v1/alerts/${id}`,{method:"DELETE"});
+    load();
+  }
 
   return (
-    <div style={{ display: "flex" }}>
-      <Sidebar />
-
-      <div
-        style={{
-          flex: 1,
-          padding: "30px",
-          background: "#f4f6f9",
-          minHeight: "100vh",
-        }}
-      >
+    <div style={{display:"flex"}}>
+      <Sidebar/>
+      <div style={{flex:1,padding:30,background:"#f4f6f9",minHeight:"100vh"}}>
         <h1>🚨 Alerts Management</h1>
 
-        {/* Create Alert */}
-
-        <div
-          style={{
-            background: "white",
-            padding: "20px",
-            borderRadius: "12px",
-            marginTop: "20px",
-            boxShadow: "0 3px 10px rgba(0,0,0,0.1)",
-          }}
-        >
+        <div style={{background:"white",padding:20,borderRadius:12}}>
           <h2>Create Alert</h2>
 
-          <input
-            placeholder="Village"
-            value={newAlert.village}
-            onChange={(e) =>
-              setNewAlert({
-                ...newAlert,
-                village: e.target.value,
-              })
-            }
-            style={{ padding: "8px", marginRight: "10px" }}
-          />
+          <input placeholder="Village ID" value={form.village_id}
+            onChange={e=>setForm({...form,village_id:e.target.value})}/>
 
-          <select
-            value={newAlert.severity}
-            onChange={(e) =>
-              setNewAlert({
-                ...newAlert,
-                severity: e.target.value,
-              })
-            }
-            style={{ padding: "8px", marginRight: "10px" }}
-          >
-            <option>Low</option>
-            <option>Medium</option>
-            <option>Critical</option>
+          <input placeholder="Reservoir ID" value={form.reservoir_id}
+            onChange={e=>setForm({...form,reservoir_id:e.target.value})}
+            style={{marginLeft:10}}/>
+
+          <select value={form.alert_type}
+            onChange={e=>setForm({...form,alert_type:e.target.value})}
+            style={{marginLeft:10}}>
+            <option value="risk">risk</option>
+            <option value="reservoir">reservoir</option>
+            <option value="groundwater">groundwater</option>
           </select>
 
+          <select value={form.severity}
+            onChange={e=>setForm({...form,severity:e.target.value})}
+            style={{marginLeft:10}}>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+            <option value="critical">critical</option>
+          </select>
+
+          <br/><br/>
           <input
-            placeholder="Alert Message"
-            value={newAlert.message}
-            onChange={(e) =>
-              setNewAlert({
-                ...newAlert,
-                message: e.target.value,
-              })
-            }
-            style={{
-              padding: "8px",
-              width: "300px",
-              marginRight: "10px",
-            }}
+            style={{width:"60%",padding:8}}
+            placeholder="Message"
+            value={form.message}
+            onChange={e=>setForm({...form,message:e.target.value})}
           />
 
-          <button
-            onClick={createAlert}
-            style={{
-              background: "#1976d2",
-              color: "white",
-              border: "none",
-              padding: "8px 16px",
-              cursor: "pointer",
-              borderRadius: "5px",
-            }}
-          >
+          <button onClick={createAlert} style={{marginLeft:10}}>
             Create Alert
           </button>
         </div>
 
-        {/* Alerts Table */}
-
-        <div
-          style={{
-            background: "white",
-            marginTop: "30px",
-            padding: "20px",
-            borderRadius: "12px",
-            boxShadow: "0 3px 10px rgba(0,0,0,0.1)",
-          }}
-        >
+        <div style={{background:"white",padding:20,borderRadius:12,marginTop:20}}>
           <h2>Current Alerts</h2>
 
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              marginTop: "20px",
-            }}
-          >
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead>
-              <tr
-                style={{
-                  background: "#1976d2",
-                  color: "white",
-                }}
-              >
+              <tr>
                 <th>ID</th>
-                <th>Village</th>
+                <th>Type</th>
                 <th>Severity</th>
                 <th>Message</th>
-                <th>Status</th>
                 <th>Read</th>
+                <th>Created</th>
                 <th>Delete</th>
               </tr>
             </thead>
 
             <tbody>
-              {alerts.map((alert) => (
-                <tr
-                  key={alert.id}
-                  style={{
-                    textAlign: "center",
-                    borderBottom: "1px solid #ddd",
-                  }}
-                >
-                  <td>{alert.id}</td>
-
-                  <td>{alert.village}</td>
-
-                  <td
-                    style={{
-                      color: getSeverityColor(alert.severity),
-                      fontWeight: "bold",
-                    }}
-                  >
-                    {alert.severity}
-                  </td>
-
-                  <td>{alert.message}</td>
-
-                  <td>{alert.status}</td>
-
+              {alerts.map((a:any)=>(
+                <tr key={a.id}>
+                  <td>{a.id}</td>
+                  <td>{a.alert_type}</td>
+                  <td>{a.severity}</td>
+                  <td>{a.message}</td>
+                  <td>{a.is_read?"Yes":"No"}</td>
+                  <td>{a.created_at}</td>
                   <td>
-                    <button
-                      onClick={() => markAsRead(alert.id)}
-                      style={{
-                        background: "#43a047",
-                        color: "white",
-                        border: "none",
-                        padding: "6px 12px",
-                        cursor: "pointer",
-                        borderRadius: "5px",
-                      }}
-                    >
-                      Read
-                    </button>
-                  </td>
-
-                  <td>
-                    <button
-                      onClick={() => deleteAlert(alert.id)}
-                      style={{
-                        background: "#d32f2f",
-                        color: "white",
-                        border: "none",
-                        padding: "6px 12px",
-                        cursor: "pointer",
-                        borderRadius: "5px",
-                      }}
-                    >
+                    <button onClick={()=>deleteAlert(a.id)}>
                       Delete
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
+
           </table>
         </div>
+
       </div>
     </div>
   );

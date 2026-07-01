@@ -6,7 +6,7 @@ import logging
 
 from app.core.config import settings
 from app.db.database import engine, Base
-from app.api.routes import auth, villages, reservoirs, predictions, forecasts, alerts, reports, dashboard, ai_assistant
+from app.api.routes import auth, villages, reservoirs, predictions, forecasts, alerts, reports, dashboard, ai_assistant, analytics
 
 # Configure logging
 logging.basicConfig(
@@ -67,6 +67,11 @@ app.include_router(forecasts.router, prefix="/api/v1/forecasts", tags=["Forecast
 app.include_router(alerts.router, prefix="/api/v1/alerts", tags=["Alerts"])
 app.include_router(reports.router, prefix="/api/v1/reports", tags=["Reports"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+app.include_router(
+    analytics.router,
+    prefix="/api/v1/analytics",
+    tags=["Analytics"]
+)
 app.include_router(ai_assistant.router, prefix="/api/v1/ai", tags=["AI Assistant"])
 
 @app.get("/", tags=["System"])

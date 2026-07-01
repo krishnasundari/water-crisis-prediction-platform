@@ -1,75 +1,66 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+from datetime import datetime
+import json
+import os
+
+from app.db.database import get_db
+from app.models.models import Report
+from app.schemas.schemas import ReportGenerateRequest
+from app.utils.report_generator import generate_report
 
 router = APIRouter()
 
-# Temporary in-memory storage
-reports = [
-    {
-        "id": 1,
-        "title": "Monthly Water Report",
-        "type": "PDF",
-        "created_at": "2026-06-26"
-    },
-    {
-        "id": 2,
-        "title": "Village Risk Analysis",
-        "type": "CSV",
-        "created_at": "2026-06-26"
-    }
-]
-
-
 @router.get("/")
-async def list_reports():
-    return reports
-
+def list_reports(db: Session = Depends(get_db)):
+    return db.query(Report).order_by(Report.created_at.desc()).all()
 
 @router.post("/generate")
-async def generate_report(report: dict):
-
-    report["id"] = len(reports) + 1
-
-    reports.append(report)
-
-    return {
-        "message": "Report generated successfully",
-        "data": report
+def create_report(report: ReportGenerateRequest, db: Session = Depends(get_db)):
+    title = f"{report.report_type.upper()} Report {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}"
+    data = {
+        "Generated On": str(datetime.now()),
+        "Include Predictions": report.include_predictions,
+        "Include Forecasts": report.include_forecasts,
+        "Filters": json.dumps(report.filters or {})
     }
-
+    file_path = generate_report(report.report_type, title, data)
+    db_report = Report(
+        title=title,
+        report_type=report.report_type.lower(),
+        file_path=file_path,
+        filters=json.dumps(report.filters or {}),
+        created_at=datetime.now()
+    )
+    db.add(db_report)
+    db.commit()
+    db.refresh(db_report)
+    return {"message":"Report generated successfully.","report":db_report}
 
 @router.get("/{report_id}")
-async def get_report(report_id: int):
-
-    for report in reports:
-        if report["id"] == report_id:
-            return report
-
-    return {
-        "error": "Report not found"
-    }
-
-
-@router.delete("/{report_id}")
-async def delete_report(report_id: int):
-
-    for report in reports:
-
-        if report["id"] == report_id:
-            reports.remove(report)
-
-            return {
-                "message": "Report deleted successfully"
-            }
-
-    return {
-        "error": "Report not found"
-    }
-
+def get_report(report_id:int, db:Session=Depends(get_db)):
+    report=db.query(Report).filter(Report.id==report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return report
 
 @router.get("/{report_id}/download")
-async def download_report(report_id: int):
+def download_report(report_id:int, db:Session=Depends(get_db)):
+    report=db.query(Report).filter(Report.id==report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if not os.path.exists(report.file_path):
+        raise HTTPException(status_code=404, detail="Generated file not found")
+    return FileResponse(report.file_path, filename=os.path.basename(report.file_path), media_type="application/octet-stream")
 
-    return {
-        "message": "Download started",
-        "report_id": report_id
-    }
+@router.delete("/{report_id}")
+def delete_report(report_id:int, db:Session=Depends(get_db)):
+    report=db.query(Report).filter(Report.id==report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if report.file_path and os.path.exists(report.file_path):
+        os.remove(report.file_path)
+    db.delete(report)
+    db.commit()
+    return {"message":"Report deleted successfully."}

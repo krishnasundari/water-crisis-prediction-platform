@@ -1,78 +1,75 @@
+import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
 export default function MapsPage() {
-  const villages = [
-    {
-      id: 1,
-      name: "Patna Village",
-      lat: 25.5941,
-      lng: 85.1376,
-      risk: "Safe",
-    },
-    {
-      id: 2,
-      name: "Nalanda Village",
-      lat: 25.1367,
-      lng: 85.4437,
-      risk: "Moderate",
-    },
-    {
-      id: 3,
-      name: "Pongodu",
-      lat: 17.385,
-      lng: 78.4867,
-      risk: "High",
-    },
-  ];
+  const [villages, setVillages] = useState<any[]>([]);
+  const [reservoirs, setReservoirs] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/api/v1/villages")
+      .then(r => r.json())
+      .then(setVillages)
+      .catch(console.error);
+
+    fetch("http://127.0.0.1:8000/api/v1/reservoirs")
+      .then(r => r.json())
+      .then(setReservoirs)
+      .catch(console.error);
+  }, []);
 
   return (
-    <div style={{ display: "flex" }}>
-      <Sidebar />
-
-      <div
-        style={{
-          flex: 1,
-          padding: "20px",
-          background: "#f5f7fa",
-          minHeight: "100vh",
-        }}
-      >
+    <div style={{display:"flex"}}>
+      <Sidebar/>
+      <div style={{flex:1,padding:20,background:"#f5f7fa",minHeight:"100vh"}}>
         <h1>🌍 Water Crisis Monitoring Map</h1>
 
-        <div
-          style={{
-            marginTop: "20px",
-            background: "white",
-            padding: "10px",
-            borderRadius: "12px",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-          }}
-        >
+        <div style={{
+          marginTop:20,
+          background:"white",
+          borderRadius:12,
+          padding:10,
+          boxShadow:"0 2px 10px rgba(0,0,0,.1)"
+        }}>
           <MapContainer
-            center={[23.5937, 80.9629]}
+            center={[22.5,79]}
             zoom={5}
-            style={{
-              height: "600px",
-              width: "100%",
-              borderRadius: "12px",
-            }}
+            style={{height:"650px",width:"100%",borderRadius:"12px"}}
           >
             <TileLayer
               attribution="&copy; OpenStreetMap contributors"
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            {villages.map((village) => (
+            {villages.map(v=>(
               <Marker
-                key={village.id}
-                position={[village.lat, village.lng]}
+                key={"v"+v.id}
+                position={[v.latitude,v.longitude]}
               >
                 <Popup>
-                  <strong>{village.name}</strong>
-                  <br />
-                  Risk Level: {village.risk}
+                  <b>🏘️ {v.name}</b><br/>
+                  District: {v.district}<br/>
+                  State: {v.state}<br/>
+                  Population: {v.population}<br/>
+                  Water Source: {v.water_source}<br/>
+                  Reservoir Dependency: {v.reservoir_dependency}%
+                </Popup>
+              </Marker>
+            ))}
+
+            {reservoirs
+              .filter((r:any)=>r.latitude!==null && r.longitude!==null)
+              .map((r:any)=>(
+              <Marker
+                key={"r"+r.id}
+                position={[r.latitude,r.longitude]}
+              >
+                <Popup>
+                  <b>💧 {r.name}</b><br/>
+                  State: {r.state}<br/>
+                  Capacity: {r.capacity}<br/>
+                  Current Level: {r.current_level}
                 </Popup>
               </Marker>
             ))}
