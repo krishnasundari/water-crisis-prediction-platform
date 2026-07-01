@@ -44,22 +44,152 @@ export default function AIAssistantPage() {
         />
 
         <div style={{marginTop:15}}>
-          <button onClick={send}>Send</button>
-          <button onClick={clear} style={{marginLeft:10}}>Clear History</button>
+          <div
+  style={{
+    marginTop: 15,
+    display: "flex",
+    gap: "12px",
+  }}
+>
+  <button
+    onClick={send}
+    style={{
+      background: "#2563eb",
+      color: "white",
+      border: "none",
+      padding: "10px 20px",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontWeight: "bold",
+    }}
+  >
+    Send Message
+  </button>
+
+  <button
+    onClick={clear}
+    style={{
+      background: "#dc2626",
+      color: "white",
+      border: "none",
+      padding: "10px 20px",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontWeight: "bold",
+    }}
+  >
+    Clear History
+  </button>
+</div>
+          
         </div>
 
-        <div style={{background:"white",padding:20,borderRadius:12,marginTop:20}}>
-          <h2>AI Response</h2>
-          <p>{reply || "No response yet."}</p>
-        </div>
+        <div
+  style={{
+    background: "white",
+    padding: "20px",
+    borderRadius: "12px",
+    marginTop: "20px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+  }}
+>
+  <h2>🤖 AI Response</h2>
+
+  <div
+    style={{
+      background: "#eff6ff",
+      padding: "15px",
+      borderRadius: "10px",
+      whiteSpace: "pre-wrap",
+      lineHeight: "1.7",
+      borderLeft: "5px solid #2563eb",
+      minHeight: "80px",
+    }}
+  >
+    {reply || "Ask me something about water crisis prediction, reservoirs, rainfall, or alerts."}
+  </div>
+</div>
 
         <div style={{background:"white",padding:20,borderRadius:12,marginTop:20}}>
           <h2>Recommendations</h2>
           {recommendations && (
             <>
-              <p>High Risk: {recommendations.high_risk_predictions}</p>
-              <p>Low Reservoirs: {recommendations.low_reservoirs}</p>
-              <p>Active Alerts: {recommendations.active_alerts}</p>
+              <div
+  style={{
+    background: "white",
+    padding: "20px",
+    borderRadius: "12px",
+    marginTop: "20px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+  }}
+>
+  <h2>💡 AI Recommendations</h2>
+
+  {recommendations && (
+    <>
+      <div
+        style={{
+          display: "flex",
+          gap: "20px",
+          marginBottom: "20px",
+        }}
+      >
+        <div
+          style={{
+            flex: 1,
+            background: "#fee2e2",
+            padding: "15px",
+            borderRadius: "10px",
+          }}
+        >
+          <h3>⚠ High Risk</h3>
+          <h1>{recommendations.high_risk_predictions}</h1>
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            background: "#dbeafe",
+            padding: "15px",
+            borderRadius: "10px",
+          }}
+        >
+          <h3>💧 Low Reservoirs</h3>
+          <h1>{recommendations.low_reservoirs}</h1>
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            background: "#dcfce7",
+            padding: "15px",
+            borderRadius: "10px",
+          }}
+        >
+          <h3>🚨 Active Alerts</h3>
+          <h1>{recommendations.active_alerts}</h1>
+        </div>
+      </div>
+
+      <h3>Suggested Actions</h3>
+
+      <ul>
+        {recommendations.recommendations.map(
+          (r: string, i: number) => (
+            <li
+              key={i}
+              style={{
+                marginBottom: "10px",
+              }}
+            >
+              {r}
+            </li>
+          )
+        )}
+      </ul>
+    </>
+  )}
+</div>
               <ul>
                 {recommendations.recommendations.map((r:string,i:number)=><li key={i}>{r}</li>)}
               </ul>
@@ -67,17 +197,95 @@ export default function AIAssistantPage() {
           )}
         </div>
 
-        <div style={{background:"white",padding:20,borderRadius:12,marginTop:20}}>
-          <h2>Conversation History</h2>
-          {history.length===0 ? <p>No conversations.</p> :
-            history.map((h:any,index:number)=>(
-              <div key={index} style={{borderBottom:"1px solid #ddd",paddingBottom:10,marginBottom:10}}>
-                <b>You:</b> {h.user_message}<br/>
-                <b>AI:</b> {h.assistant_response}
-              </div>
-            ))
-          }
+        <div
+  style={{
+    background: "white",
+    padding: "20px",
+    borderRadius: "12px",
+    marginTop: "20px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+  }}
+>
+  <h2>💬 Conversation History</h2>
+
+  {history.length === 0 ? (
+    <p>No conversations.</p>
+  ) : (
+    history.map((h: any) => (
+      <div
+        key={h.id}
+        style={{
+          marginBottom: "25px",
+        }}
+      >
+        {/* User */}
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+          }}
+        >
+          <div
+            style={{
+              background: "#2563eb",
+              color: "white",
+              padding: "12px 16px",
+              borderRadius: "15px",
+              maxWidth: "70%",
+            }}
+          >
+            <b>You</b>
+
+            <div style={{ marginTop: "6px" }}>
+              {h.user_message}
+            </div>
+          </div>
         </div>
+
+        {/* AI */}
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-start",
+            marginTop: "12px",
+          }}
+        >
+          <div
+            style={{
+              background: "#f3f4f6",
+              padding: "12px 16px",
+              borderRadius: "15px",
+              maxWidth: "70%",
+            }}
+          >
+            <b>🤖 AI</b>
+
+            <div
+              style={{
+                marginTop: "6px",
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {h.assistant_response}
+            </div>
+
+            <div
+              style={{
+                marginTop: "8px",
+                fontSize: "12px",
+                color: "#6b7280",
+              }}
+            >
+              {new Date(h.created_at).toLocaleString()}
+            </div>
+          </div>
+        </div>
+      </div>
+    ))
+  )}
+</div>
       </div>
     </div>
   );
