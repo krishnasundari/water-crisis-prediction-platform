@@ -31,6 +31,20 @@ export default function ReportsPage() {
   const filteredReports = reports.filter((report) =>
   report.title.toLowerCase().includes(searchTerm.toLowerCase())
 );
+const totalReports = reports.length;
+
+const pdfReports = reports.filter(
+  (r) => r.report_type === "pdf"
+).length;
+
+const excelReports = reports.filter(
+  (r) => r.report_type === "excel"
+).length;
+
+const latestReport =
+  reports.length > 0
+    ? new Date(reports[0].created_at).toLocaleDateString()
+    : "N/A";
 
   const generateReport = async () => {
     try {
@@ -229,7 +243,58 @@ opacity: generating ? 0.6 : 1,
             padding: "20px",
             boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
           }}
-        >
+        ><div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+    gap: "20px",
+    marginBottom: "25px",
+  }}
+>
+  <div
+    style={{
+      background: "#e3f2fd",
+      padding: "18px",
+      borderRadius: "10px",
+    }}
+  >
+    <h3>📄 Total Reports</h3>
+    <h1>{totalReports}</h1>
+  </div>
+
+  <div
+    style={{
+      background: "#e8f5e9",
+      padding: "18px",
+      borderRadius: "10px",
+    }}
+  >
+    <h3>📥 PDF Reports</h3>
+    <h1>{pdfReports}</h1>
+  </div>
+
+  <div
+    style={{
+      background: "#fff8e1",
+      padding: "18px",
+      borderRadius: "10px",
+    }}
+  >
+    <h3>📊 Excel Reports</h3>
+    <h1>{excelReports}</h1>
+  </div>
+
+  <div
+    style={{
+      background: "#f3e5f5",
+      padding: "18px",
+      borderRadius: "10px",
+    }}
+  >
+    <h3>🕒 Latest Report</h3>
+    <h1 style={{ fontSize: "18px" }}>{latestReport}</h1>
+  </div>
+</div>
           <h2 style={{ marginTop: 0 }}>Generated Reports</h2>
           <input
   type="text"
