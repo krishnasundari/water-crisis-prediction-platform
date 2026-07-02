@@ -7,6 +7,7 @@ export default function AIAssistantPage() {
   const [reply,setReply]=useState("");
   const [history,setHistory]=useState<any[]>([]);
   const [recommendations,setRecommendations]=useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
   async function load(){
     try{
@@ -17,13 +18,25 @@ export default function AIAssistantPage() {
 
   useEffect(()=>{load();},[]);
 
-  async function send(){
-    if(!message.trim()) return;
-    const res=await aiAPI.chat(message);
+async function send() {
+  if (!message.trim()) return;
+
+  try {
+    setLoading(true);
+
+    const res = await aiAPI.chat(message);
+
     setReply(res.assistant_response);
+
     setMessage("");
-    load();
+
+    await load();
+  } catch (error) {
+    console.error(error);
+  } finally {
+    setLoading(false);
   }
+}
 
   async function clear(){
     await aiAPI.clearHistory();
@@ -121,7 +134,8 @@ export default function AIAssistantPage() {
   }}
 >
   <button
-    onClick={send}
+  onClick={send}
+  disabled={loading}
     style={{
       background: "#2563eb",
       color: "white",
@@ -132,7 +146,7 @@ export default function AIAssistantPage() {
       fontWeight: "bold",
     }}
   >
-    Send Message
+    {loading ? "Thinking..." : "Send Message"}
   </button>
 
   <button
@@ -175,7 +189,10 @@ export default function AIAssistantPage() {
       minHeight: "80px",
     }}
   >
-    {reply || "Ask me something about water crisis prediction, reservoirs, rainfall, or alerts."}
+   {loading
+  ? "🤖 AI is thinking..."
+  : reply ||
+    "Ask me something about water crisis prediction, reservoirs, rainfall, or alerts."}
   </div>
 </div>
 
