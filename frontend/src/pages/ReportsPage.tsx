@@ -5,6 +5,7 @@ const API_BASE = "http://127.0.0.1:8000/api/v1";
 
 export default function ReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
+  const [generating, setGenerating] = useState(false);
 
   const [newReport, setNewReport] = useState({
     report_type: "pdf",
@@ -30,10 +31,12 @@ export default function ReportsPage() {
   const generateReport = async () => {
     try {
       let filtersObject = {};
+      setGenerating(true);
 
       if (newReport.filters.trim() !== "") {
         try {
           filtersObject = JSON.parse(newReport.filters);
+          setGenerating(true);
         } catch {
           alert("Filters must be valid JSON.");
           return;
@@ -60,10 +63,13 @@ export default function ReportsPage() {
         filters: "",
       });
 
-      loadReports();
+      await loadReports();
+      alert("✅ Report generated successfully!");
+      setGenerating(false);
     } catch (err) {
       console.error(err);
       alert("Failed to generate report.");
+      setGenerating(false);
     }
   };
 
@@ -195,18 +201,20 @@ export default function ReportsPage() {
             />
           </div>
 
-          <button
-            onClick={generateReport}
+         <button
+    onClick={generateReport}
+    disabled={generating}
             style={{
               padding: "10px 20px",
               background: "#1565c0",
               color: "white",
               border: "none",
               borderRadius: "5px",
-              cursor: "pointer",
+              cursor: generating ? "not-allowed" : "pointer",
+opacity: generating ? 0.6 : 1,
             }}
           >
-            Generate Report
+            {generating ? "Generating..." : "Generate Report"}
           </button>
         </div>
 
