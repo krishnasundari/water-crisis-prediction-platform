@@ -110,11 +110,7 @@ export default function AIAssistantPage() {
   </div>
 </div>
 
-        <div style={{background:"white",padding:20,borderRadius:12,marginTop:20}}>
-          <h2>Recommendations</h2>
-          {recommendations && (
-            <>
-              <div
+  <div
   style={{
     background: "white",
     padding: "20px",
@@ -190,12 +186,6 @@ export default function AIAssistantPage() {
     </>
   )}
 </div>
-              <ul>
-                {recommendations.recommendations.map((r:string,i:number)=><li key={i}>{r}</li>)}
-              </ul>
-            </>
-          )}
-        </div>
 
         <div
   style={{
