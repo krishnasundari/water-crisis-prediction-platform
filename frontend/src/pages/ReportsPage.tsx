@@ -6,6 +6,7 @@ const API_BASE = "http://127.0.0.1:8000/api/v1";
 export default function ReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [newReport, setNewReport] = useState({
     report_type: "pdf",
@@ -27,6 +28,9 @@ export default function ReportsPage() {
   useEffect(() => {
     loadReports();
   }, []);
+  const filteredReports = reports.filter((report) =>
+  report.title.toLowerCase().includes(searchTerm.toLowerCase())
+);
 
   const generateReport = async () => {
     try {
@@ -227,6 +231,19 @@ opacity: generating ? 0.6 : 1,
           }}
         >
           <h2 style={{ marginTop: 0 }}>Generated Reports</h2>
+          <input
+  type="text"
+  placeholder="🔍 Search reports..."
+  value={searchTerm}
+  onChange={(e) => setSearchTerm(e.target.value)}
+  style={{
+    width: "100%",
+    padding: "10px",
+    marginBottom: "20px",
+    borderRadius: "6px",
+    border: "1px solid #ccc",
+  }}
+/>
 
           <table
             style={{
@@ -251,7 +268,7 @@ opacity: generating ? 0.6 : 1,
             </thead>
 
             <tbody>
-              {reports.length === 0 ? (
+              {filteredReports.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -264,7 +281,7 @@ opacity: generating ? 0.6 : 1,
                   </td>
                 </tr>
               ) : (
-                reports.map((report) => (
+                filteredReports.map((report) => (
                   <tr
                     key={report.id}
                     style={{
