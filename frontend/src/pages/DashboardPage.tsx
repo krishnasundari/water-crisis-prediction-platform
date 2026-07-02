@@ -6,6 +6,12 @@ import {
   Cell,
   Tooltip,
   ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
 } from "recharts";
 
 export default function DashboardPage() {
@@ -89,6 +95,14 @@ export default function DashboardPage() {
       value: stats.high_risk_villages,
     },
   ];
+  const monthlyTrend = [
+  { month: "Jan", risk: 45 },
+  { month: "Feb", risk: 52 },
+  { month: "Mar", risk: 60 },
+  { month: "Apr", risk: 58 },
+  { month: "May", risk: 72 },
+  { month: "Jun", risk: stats.average_risk_score },
+];
 
   const COLORS = ["#4caf50", "#ff9800", "#f44336"];
 
@@ -233,6 +247,33 @@ cursor: "pointer",
             </PieChart>
           </ResponsiveContainer>
         </div>
+        <div
+  style={{
+    marginTop: "40px",
+    background: "white",
+    borderRadius: "12px",
+    padding: "20px",
+    boxShadow: "0 3px 10px rgba(0,0,0,0.12)",
+  }}
+>
+  <h2>📈 Monthly Water Risk Trend</h2>
+
+  <ResponsiveContainer width="100%" height={320}>
+    <LineChart data={monthlyTrend}>
+      <CartesianGrid strokeDasharray="3 3" />
+      <XAxis dataKey="month" />
+      <YAxis />
+      <Tooltip />
+      <Legend />
+      <Line
+        type="monotone"
+        dataKey="risk"
+        stroke="#1976d2"
+        strokeWidth={3}
+      />
+    </LineChart>
+  </ResponsiveContainer>
+</div>
 
         {/* Alerts */}
 
