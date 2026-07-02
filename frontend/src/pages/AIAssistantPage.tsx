@@ -36,6 +36,75 @@ export default function AIAssistantPage() {
       <Sidebar/>
       <div style={{flex:1,padding:30,background:"#f4f6f9",minHeight:"100vh"}}>
         <h1>🤖 AI Water Assistant</h1>
+        <div
+  style={{
+    background: "white",
+    padding: "15px",
+    borderRadius: "12px",
+    margin: "20px 0",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+  }}
+>
+  <h3 style={{ marginBottom: "12px" }}>
+    💡 Quick Questions
+  </h3>
+
+  <div
+    style={{
+      display: "flex",
+      gap: "10px",
+      flexWrap: "wrap",
+    }}
+  >
+    <button
+  onClick={() =>
+    setMessage(
+      "Which villages are currently at high risk?"
+    )
+  }
+  style={{
+    padding: "10px 18px",
+    border: "none",
+    borderRadius: "20px",
+    background: "#2563eb",
+    color: "white",
+    cursor: "pointer",
+  }}
+>
+  🚨 High Risk Villages
+</button>
+
+    <button
+      onClick={() =>
+        setMessage(
+          "Show the current reservoir status."
+        )
+      }
+    >
+      💧 Reservoir Status
+    </button>
+
+    <button
+      onClick={() =>
+        setMessage(
+          "What is the rainfall prediction?"
+        )
+      }
+    >
+      🌧 Rainfall Prediction
+    </button>
+
+    <button
+      onClick={() =>
+        setMessage(
+          "Give me water conservation tips."
+        )
+      }
+    >
+      🌱 Water Saving Tips
+    </button>
+  </div>
+</div>
 
         <textarea style={{width:"100%",height:120,padding:10}}
           value={message}
