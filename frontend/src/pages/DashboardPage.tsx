@@ -108,6 +108,47 @@ export default function DashboardPage() {
         <h1 style={{ color: "#1565c0" }}>
           🌊 Water Crisis Prediction & Management Platform
         </h1>
+        <div
+  style={{
+    display: "flex",
+    gap: "20px",
+    marginBottom: "25px",
+    flexWrap: "wrap",
+  }}
+>
+  <div
+    style={{
+      background: "#e8f5e9",
+      padding: "15px 20px",
+      borderRadius: "10px",
+      fontWeight: 600,
+    }}
+  >
+    🟢 System Status : Online
+  </div>
+
+  <div
+    style={{
+      background: "#e3f2fd",
+      padding: "15px 20px",
+      borderRadius: "10px",
+      fontWeight: 600,
+    }}
+  >
+    📡 AI Prediction : Active
+  </div>
+
+  <div
+    style={{
+      background: "#fff3e0",
+      padding: "15px 20px",
+      borderRadius: "10px",
+      fontWeight: 600,
+    }}
+  >
+    🕒 Last Updated : Just Now
+  </div>
+</div>
 
         <p style={{ color: "#666", marginBottom: "30px" }}>
           AI Powered Water Resource Monitoring Dashboard
@@ -126,19 +167,27 @@ export default function DashboardPage() {
             <div
               key={card.title}
               style={{
-                background: "white",
+                background: `linear-gradient(135deg, ${card.color}, ${card.color}CC)`,
+color: "white",
+transition: "0.3s",
+cursor: "pointer",
                 borderRadius: "12px",
                 padding: "20px",
                 boxShadow: "0 3px 10px rgba(0,0,0,0.12)",
               }}
             >
-              <h3 style={{ marginBottom: "15px" }}>
+              <h3
+  style={{
+    marginBottom: "15px",
+    color: "white",
+  }}
+>
                 {card.icon} {card.title}
               </h3>
 
               <h1
                 style={{
-                  color: card.color,
+                  color: "white",
                   fontSize: "36px",
                   margin: 0,
                 }}
@@ -165,11 +214,13 @@ export default function DashboardPage() {
           <ResponsiveContainer width="100%" height={350}>
             <PieChart>
               <Pie
-                data={riskData}
-                dataKey="value"
-                outerRadius={120}
-                label
-              >
+    data={riskData}
+    dataKey="value"
+    innerRadius={70}
+    outerRadius={120}
+    paddingAngle={4}
+    label
+>
                 {riskData.map((entry, index) => (
                   <Cell
                     key={index}
@@ -202,7 +253,9 @@ export default function DashboardPage() {
             </p>
           ) : (
             <ul>
-              <li>⚠️ Active water crisis alerts detected.</li>
+              <li>
+  ⚠️ {stats.active_alerts} active water crisis alerts detected.
+</li>
             </ul>
           )}
         </div>
@@ -220,29 +273,37 @@ export default function DashboardPage() {
         >
           <h2>🤖 AI Prediction Summary</h2>
 
-          <p style={{ lineHeight: "28px" }}>
-            📈 Average Risk Score :
-            <b> {stats.average_risk_score}%</b>
+<div
+  style={{
+    lineHeight: "30px",
+    fontSize: "16px",
+    background: "#f9fafb",
+    padding: "20px",
+    borderRadius: "12px",
+  }}
+>
+  📈 Average Risk Score :
+  <b> {stats.average_risk_score}%</b>
 
-            <br />
-            <br />
+  <br />
+  <br />
 
-            🔴 High Risk Villages :
-            <b> {stats.high_risk_villages}</b>
+  🔴 High Risk Villages :
+  <b> {stats.high_risk_villages}</b>
 
-            <br />
-            <br />
+  <br />
+  <br />
 
-            🟢 Safe Villages :
-            <b> {stats.safe_villages}</b>
+  🟢 Safe Villages :
+  <b> {stats.safe_villages}</b>
 
-            <br />
-            <br />
+  <br />
+  <br />
 
-            The AI model recommends continuous monitoring of rainfall,
-            groundwater level and reservoir capacity for sustainable water
-            resource management.
-          </p>
+  The AI model recommends continuous monitoring of rainfall,
+  groundwater level and reservoir capacity for sustainable water
+  resource management.
+</div>
         </div>
       </div>
     </div>
