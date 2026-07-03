@@ -6,6 +6,7 @@ import {
   Marker,
   Popup,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -123,6 +124,29 @@ function FitBounds({
 
   return null;
 }
+function UserLocation({
+  position,
+}: {
+  position: [number, number] | null;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (position) {
+      map.setView(position, 12);
+    }
+  }, [position, map]);
+
+  if (!position) return null;
+
+  return (
+    <Marker position={position}>
+      <Popup>
+        📍 You are here
+      </Popup>
+    </Marker>
+  );
+}
 
 // ============================
 // Main Component
@@ -132,6 +156,8 @@ export default function MapsPage() {
   const [villages, setVillages] = useState<Village[]>([]);
   const [reservoirs, setReservoirs] = useState<Reservoir[]>([]);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [userLocation, setUserLocation] =
+  useState<[number, number] | null>(null);
   const [search, setSearch] = useState("");
 const [districtFilter, setDistrictFilter] = useState("All");
 const [riskFilter, setRiskFilter] = useState("All");
@@ -237,6 +263,24 @@ const filteredVillages = useMemo(() => {
         return "#16a34a";
     }
   };
+  const locateMe = () => {
+  if (!navigator.geolocation) {
+    alert("Geolocation is not supported.");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      setUserLocation([
+        position.coords.latitude,
+        position.coords.longitude,
+      ]);
+    },
+    () => {
+      alert("Unable to fetch your location.");
+    }
+  );
+};
 
   return (
     <div
@@ -263,6 +307,26 @@ const filteredVillages = useMemo(() => {
         >
           🌍 Water Crisis Monitoring Map
         </h1>
+        <div
+  style={{
+    marginBottom: "20px",
+  }}
+>
+  <button
+    onClick={locateMe}
+    style={{
+      background: "#1976d2",
+      color: "white",
+      border: "none",
+      padding: "10px 18px",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontWeight: "bold",
+    }}
+  >
+    📍 Locate Me
+  </button>
+</div>
 
         {/* Statistics */}
 
@@ -416,6 +480,7 @@ const filteredVillages = useMemo(() => {
               villages={villages}
               reservoirs={reservoirs}
             />
+            <UserLocation position={userLocation} />
 
             {/* Village Markers */}
 
