@@ -1,7 +1,42 @@
+# =========================
+# Python
+# =========================
 backend/venv/
-frontend/node_modules/
-*.db
-.env
-.vscode/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.db
+.pytest_cache/
+.mypy_cache/
+
+# =========================
+# Node
+# =========================
+frontend/node_modules/
+node_modules/
+frontend/dist/
+dist/
+
+# =========================
+# Environment
+# =========================
+.env
+.env.*
+
+# =========================
+# IDE
+# =========================
+.vscode/
+.idea/
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+*.log
