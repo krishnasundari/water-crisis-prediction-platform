@@ -13,7 +13,7 @@ export default function LoginPage() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/v1/auth/login",
+    "https://water-crisis-prediction-platform-1.onrender.com/api/v1/auth/login",
         {
           method: "POST",
           headers: {
