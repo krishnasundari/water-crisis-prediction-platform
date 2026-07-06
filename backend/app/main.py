@@ -45,7 +45,13 @@ app.add_middleware(
 # Add trusted host middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1", "*.render.com", "*.railway.app"]
+    allowed_hosts=[
+        "localhost",
+        "127.0.0.1",
+        "*.onrender.com",
+        "*.render.com",
+        "*.railway.app",
+    ]
 )
 
 # Health check endpoint
