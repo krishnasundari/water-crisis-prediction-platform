@@ -23,7 +23,11 @@ class Settings(BaseSettings):
     JWT_REFRESH_EXPIRATION_DAYS: int = 7
     
     # Security
-    CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:5173"]
+    CORS_ORIGINS: list = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://water-crisis-platform-frontend.onrender.com",
+]
     
     # OpenAI Settings
     OPENAI_API_KEY: Optional[str] = None
