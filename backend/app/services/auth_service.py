@@ -14,7 +14,9 @@ from app.schemas.schemas import UserCreate, UserResponse
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def hash_password(password: str) -> str:
-    """Hash password using bcrypt"""
+    print("PASSWORD:", password)
+    print("TYPE:", type(password))
+    print("LENGTH:", len(password))
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
