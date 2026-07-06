@@ -1,4 +1,4 @@
-import React from 'react'
+
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import './styles/App.css'
 import ReservoirsPage from "./pages/ReservoirsPage";
@@ -22,7 +22,7 @@ function App() {
         <Routes>
           {/* Auth Routes */}
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<LoginPage signup />} />
+          <Route path="/signup" element={<LoginPage />} />
           
           {/* Main Routes */}
           <Route

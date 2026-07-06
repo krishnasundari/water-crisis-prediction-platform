@@ -6,12 +6,12 @@ import {
   Marker,
   Popup,
   useMap,
-  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-const API = "http://127.0.0.1:8000/api/v1";
+const API =
+  "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
 
 // ============================
 // Marker Icons

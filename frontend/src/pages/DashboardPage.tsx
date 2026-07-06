@@ -235,7 +235,7 @@ cursor: "pointer",
     paddingAngle={4}
     label
 >
-                {riskData.map((entry, index) => (
+                {riskData.map((_, index) => (
                   <Cell
                     key={index}
                     fill={COLORS[index]}
