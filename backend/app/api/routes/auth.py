@@ -28,7 +28,16 @@ async def register(user_create: UserCreate, db: Session = Depends(get_db)):
     - **role**: User role (admin, analyst, or government_officer)
     """
     db_user = register_user(db, user_create)
-    return db_user
+    
+    return UserResponse(
+    id=db_user.id,
+    email=db_user.email,
+    username=db_user.username,
+    full_name=db_user.full_name,
+    role=db_user.role.name if db_user.role else None,
+    is_active=db_user.is_active,
+    created_at=db_user.created_at,
+)
 
 @router.post("/login", response_model=TokenResponse)
 async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
