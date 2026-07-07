@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     JWT_REFRESH_EXPIRATION_DAYS: int = 7
     
     # Security
-   CORS_ORIGINS: list = ["*"]
+    CORS_ORIGINS: list = ["*"]
     
     # OpenAI Settings
     OPENAI_API_KEY: Optional[str] = None
