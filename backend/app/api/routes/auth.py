@@ -15,6 +15,7 @@ from app.services.auth_service import (
     get_current_active_user,
     register_user,
     decode_token,
+    hash_password,
 )
 from app.models.models import User
 
@@ -41,10 +42,8 @@ async def register(user_create: UserCreate, db: Session = Depends(get_db)):
     role=db_user.role.name if db_user.role else None,
     is_active=db_user.is_active,
     created_at=db_user.created_at,
-)
-
-@router.post("/google")
-async def google_login(data: GoogleLoginRequest):
+)@router.post("/google", response_model=TokenResponse)
+async def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
     try:
         user_info = id_token.verify_oauth2_token(
             data.credential,
@@ -52,17 +51,42 @@ async def google_login(data: GoogleLoginRequest):
             os.getenv("GOOGLE_CLIENT_ID"),
         )
 
+        email = user_info["email"]
+        name = user_info.get("name", "")
+        username = email.split("@")[0]
+
+        # Check if user exists
+        user = db.query(User).filter(User.email == email).first()
+
+        # Create user if not found
+        if not user:
+            user = User(
+                email=email,
+                username=username,
+                full_name=name,
+                hashed_password=hash_password("GOOGLE_AUTH_USER"),
+                role_id=3,
+                is_active=True,
+            )
+
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        access_token = create_access_token({"sub": user.email})
+        refresh_token = create_refresh_token({"sub": user.email})
+
         return {
-            "success": True,
-            "email": user_info["email"],
-            "name": user_info.get("name"),
-            "picture": user_info.get("picture"),
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": 15 * 60,
         }
 
     except Exception as e:
         raise HTTPException(
             status_code=401,
-            detail=str(e)
+            detail=str(e),
         )
 @router.post("/login", response_model=TokenResponse)
 async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
