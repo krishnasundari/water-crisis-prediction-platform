@@ -1,33 +1,40 @@
-interface GoogleLoginButtonProps {
-  onClick?: () => void;
-}
+import { GoogleLogin } from "@react-oauth/google";
 
-export default function GoogleLoginButton({
-  onClick,
-}: GoogleLoginButtonProps) {
+export default function GoogleLoginButton() {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        width: "100%",
-        padding: "12px",
-        marginTop: "15px",
-        background: "#ffffff",
-        color: "#333",
-        border: "1px solid #d1d5db",
-        borderRadius: "8px",
-        cursor: "pointer",
-        fontSize: "15px",
-        fontWeight: 500,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        gap: "10px",
+    <GoogleLogin
+      onSuccess={async (credentialResponse) => {
+        try {
+          const response = await fetch(
+            "https://water-crisis-prediction-platform-1.onrender.com/api/v1/auth/google",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                credential: credentialResponse.credential,
+              }),
+            }
+          );
+
+          const data = await response.json();
+
+          console.log(data);
+
+          if (response.ok) {
+            alert("Google Token Verified Successfully!");
+          } else {
+            alert(data.detail || "Google Login Failed");
+          }
+        } catch (err) {
+          console.error(err);
+          alert("Server Error");
+        }
       }}
-    >
-      <span style={{ fontSize: "18px" }}>🌐</span>
-      Continue with Google
-    </button>
+      onError={() => {
+        alert("Google Login Failed");
+      }}
+    />
   );
 }

@@ -1,3 +1,7 @@
+from google.oauth2 import id_token
+from google.auth.transport import requests
+from app.schemas.schemas import GoogleLoginRequest
+import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta
@@ -39,6 +43,27 @@ async def register(user_create: UserCreate, db: Session = Depends(get_db)):
     created_at=db_user.created_at,
 )
 
+@router.post("/google")
+async def google_login(data: GoogleLoginRequest):
+    try:
+        user_info = id_token.verify_oauth2_token(
+            data.credential,
+            requests.Request(),
+            os.getenv("GOOGLE_CLIENT_ID"),
+        )
+
+        return {
+            "success": True,
+            "email": user_info["email"],
+            "name": user_info.get("name"),
+            "picture": user_info.get("picture"),
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e)
+        )
 @router.post("/login", response_model=TokenResponse)
 async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     """

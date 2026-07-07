@@ -284,3 +284,5 @@ class ErrorResponse(BaseModel):
     detail: str
     status_code: int
     timestamp: datetime
+class GoogleLoginRequest(BaseModel):
+    credential: str
