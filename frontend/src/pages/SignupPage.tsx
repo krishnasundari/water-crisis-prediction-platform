@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import PasswordInput from "../components/auth/PasswordInput";
 
 export default function SignupPage() {
-
   const navigate = useNavigate();
 
   const [fullName, setFullName] = useState("");
@@ -17,8 +16,43 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const handleSignup = async (e: any) => {
+  // Photo Carousel States
+  const carouselImages = [
+    "/drought_cracked_earth.jpg",
+    "https://images.unsplash.com/photo-1508962914676-134849a727f0?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1518173946687-a4c8a383392e?auto=format&fit=crop&w=1200&q=80",
+  ];
+  
+  const carouselCaptions = [
+    {
+      title: "Mitigating Drought Risks",
+      desc: "Deploying machine learning models to forecast soil moisture deficits and aquifer depletion in real time."
+    },
+    {
+      title: "Reservoir Inflow Telemetry",
+      desc: "Simulating telemetry for water capacity limits, outflow, and river level gauges across crisis regions."
+    },
+    {
+      title: "AI-Powered Action Briefs",
+      desc: "Generating localized, prioritized emergency action guidelines for critical village sectors automatically."
+    }
+  ];
+  const [slideIndex, setSlideIndex] = useState(0);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSlideIndex((prev) => (prev + 1) % carouselImages.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getBaseURL = () => {
+    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:8000/api/v1"
+      : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
+  };
+
+  const handleSignup = async (e: any) => {
     e.preventDefault();
 
     setError("");
@@ -32,9 +66,8 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-
       const response = await fetch(
-        "https://water-crisis-prediction-platform-1.onrender.com/api/v1/auth/register",
+        `${getBaseURL()}/auth/register`,
         {
           method: "POST",
           headers: {
@@ -77,42 +110,79 @@ export default function SignupPage() {
   };
 
   return (
-
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-sky-700 to-cyan-500 flex items-center justify-center px-6">
-
-      <div className="w-full max-w-6xl grid md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl bg-white">
+    <div 
+      className="min-h-screen bg-cover bg-center flex items-center justify-center px-6 relative"
+      style={{
+        backgroundImage: `url("/water_splash_bg.png")`
+      }}
+    >
+      {/* Background Blur and Dark Overlay */}
+      <div className="absolute inset-0 bg-sky-950/10 backdrop-blur-[1px] z-0" />
+      
+      {/* Signup Card */}
+      <div className="w-full max-w-7xl grid md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl bg-white/95 backdrop-blur-md z-10 relative">
 
         {/* Left Side */}
 
-        <div className="hidden md:flex flex-col justify-center p-12 bg-gradient-to-br from-sky-800 to-cyan-600 text-white">
+        {/* LEFT SIDE PANEL WITH SCROLLING PHOTO CAROUSEL */}
+        <div className="relative hidden md:flex flex-col justify-between p-12 text-white overflow-hidden">
+          {/* Background Images */}
+          {carouselImages.map((img, idx) => (
+            <div
+              key={idx}
+              className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out ${
+                idx === slideIndex ? "opacity-100 scale-105" : "opacity-0"
+              }`}
+              style={{
+                backgroundImage: `url(${img})`,
+                transition: "opacity 1000ms ease-in-out, transform 4500ms linear",
+                transform: idx === slideIndex ? "scale(1.05)" : "scale(1.0)"
+              }}
+            />
+          ))}
+          {/* Gradient & Dark Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-slate-950/80 z-10" />
 
-          <h1 className="text-5xl font-bold mb-6">
-
-            🌊 Water Crisis Platform
-
-          </h1>
-
-          <p className="text-xl leading-9 opacity-95">
-
-            Create your account and start monitoring
-            water resources using Artificial Intelligence.
-
-          </p>
-
-          <div className="mt-12 space-y-5 text-lg">
-
-            <div>💧 Smart Monitoring</div>
-
-            <div>📊 AI Predictions</div>
-
-            <div>🛰️ GIS Maps</div>
-
-            <div>🤖 AI Assistant</div>
-
-            <div>📈 Analytics Dashboard</div>
-
+          {/* Header Title */}
+          <div className="relative z-20">
+            <div className="flex items-center gap-2">
+              <span className="text-3xl animate-bounce">🌊</span>
+              <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-sky-400 to-cyan-300 bg-clip-text text-transparent">
+                Water Crisis Platform
+              </h1>
+            </div>
+            <p className="text-xs text-sky-300 font-semibold tracking-widest uppercase mt-1">
+              Water Crisis Management
+            </p>
           </div>
 
+          {/* Sliding Photos & Captions */}
+          <div className="relative z-20 bg-slate-900/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 space-y-4">
+            <h3 className="text-xl font-bold text-sky-200 transition-all duration-500">
+              {carouselCaptions[slideIndex].title}
+            </h3>
+            <p className="text-sm opacity-90 leading-relaxed min-h-[72px] transition-all duration-500">
+              {carouselCaptions[slideIndex].desc}
+            </p>
+            
+            {/* Slide Indicators */}
+            <div className="flex gap-1.5 pt-2">
+              {carouselImages.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSlideIndex(idx)}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                    idx === slideIndex ? "w-8 bg-sky-400" : "w-2 bg-white/40"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Footer Text */}
+          <div className="relative z-20 text-xs opacity-60">
+            Satellite Link Connected • Live Decision Support
+          </div>
         </div>
 
         {/* Right Side */}

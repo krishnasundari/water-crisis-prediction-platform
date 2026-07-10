@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import PasswordInput from "../components/auth/PasswordInput";
 import GoogleLoginButton from "../components/auth/GoogleLoginButton";
@@ -6,22 +6,66 @@ import GoogleLoginButton from "../components/auth/GoogleLoginButton";
 export default function LoginPage() {
   const navigate = useNavigate();
 
+  const [view, setView] = useState<"login" | "forgot" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  
+  // OTP Reset States
+  const [otpCode, setOtpCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
+  // Photo Carousel States
+  const carouselImages = [
+    "/drought_cracked_earth.jpg",
+    "https://images.unsplash.com/photo-1508962914676-134849a727f0?auto=format&fit=crop&w=1200&q=80",
+    "https://images.unsplash.com/photo-1518173946687-a4c8a383392e?auto=format&fit=crop&w=1200&q=80",
+  ];
+  
+  const carouselCaptions = [
+    {
+      title: "Mitigating Drought Risks",
+      desc: "Deploying machine learning models to forecast soil moisture deficits and aquifer depletion in real time."
+    },
+    {
+      title: "Reservoir Inflow Telemetry",
+      desc: "Simulating telemetry for water capacity limits, outflow, and river level gauges across crisis regions."
+    },
+    {
+      title: "AI-Powered Action Briefs",
+      desc: "Generating localized, prioritized emergency action guidelines for critical village sectors automatically."
+    }
+  ];
+  const [slideIndex, setSlideIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSlideIndex((prev) => (prev + 1) % carouselImages.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Dynamic Base URL Resolver
+  const getBaseURL = () => {
+    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:8000/api/v1"
+      : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
+  };
+
   const handleLogin = async (e: any) => {
     e.preventDefault();
-
     setLoading(true);
     setError("");
+    setSuccessMessage("");
 
     try {
       const response = await fetch(
-        "https://water-crisis-prediction-platform-1.onrender.com/api/v1/auth/login",
+        `${getBaseURL()}/auth/login`,
         {
           method: "POST",
           headers: {
@@ -55,210 +99,394 @@ export default function LoginPage() {
     setLoading(false);
   };
 
+  const handleForgotPassword = async (e: any) => {
+    e.preventDefault();
+    if (!email || !email.trim()) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      const response = await fetch(
+        `${getBaseURL()}/auth/forgot-password`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.detail || "Failed to trigger reset code.");
+      } else {
+        setSuccessMessage(data.message || "OTP code sent to your email!");
+        setView("reset");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Unable to connect to server.");
+    }
+    setLoading(false);
+  };
+
+  const handleResetPassword = async (e: any) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      const response = await fetch(
+        `${getBaseURL()}/auth/reset-password`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            otp_code: otpCode,
+            new_password: newPassword,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.detail || "Failed to reset password.");
+      } else {
+        setSuccessMessage("Password reset successfully! Please log in.");
+        setView("login");
+        setPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setOtpCode("");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Unable to connect to server.");
+    }
+    setLoading(false);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-sky-700 to-cyan-500 flex items-center justify-center px-6">
+    <div 
+      className="min-h-screen bg-cover bg-center flex items-center justify-center px-6 relative"
+      style={{
+        backgroundImage: `url("/water_splash_bg.png")`
+      }}
+    >
+      {/* Background Blur and Dark Overlay */}
+      <div className="absolute inset-0 bg-sky-950/10 backdrop-blur-[1px] z-0" />
+      
+      {/* Login Card */}
+      <div className="w-full max-w-7xl grid md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl bg-white/95 backdrop-blur-md z-10 relative">
+        
+        {/* LEFT SIDE PANEL WITH SCROLLING PHOTO CAROUSEL */}
+        <div className="relative hidden md:flex flex-col justify-between p-12 text-white overflow-hidden">
+          {/* Background Images */}
+          {carouselImages.map((img, idx) => (
+            <div
+              key={idx}
+              className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out ${
+                idx === slideIndex ? "opacity-100 scale-105" : "opacity-0"
+              }`}
+              style={{
+                backgroundImage: `url(${img})`,
+                transition: "opacity 1000ms ease-in-out, transform 4500ms linear",
+                transform: idx === slideIndex ? "scale(1.05)" : "scale(1.0)"
+              }}
+            />
+          ))}
+          {/* Gradient & Dark Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-slate-950/80 z-10" />
 
-      <div className="w-full max-w-6xl grid md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl bg-white">
-
-        {/* ===========================
-            LEFT SIDE
-        ============================ */}
-
-        <div className="hidden md:flex flex-col justify-center p-12 bg-gradient-to-br from-sky-800 to-cyan-600 text-white">
-
-          <h1 className="text-5xl font-bold mb-6">
-            🌊 Water Crisis Platform
-          </h1>
-
-          <p className="text-xl leading-9 opacity-95">
-            AI-Powered Water Resource
-            Prediction & Management
-            Platform.
-          </p>
-
-          <div className="mt-12 space-y-5 text-lg">
-
-            <div>
-              💧 Monitor Reservoir Levels
+          {/* Header Title */}
+          <div className="relative z-20">
+            <div className="flex items-center gap-2">
+              <span className="text-3xl animate-bounce">🌊</span>
+              <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-sky-400 to-cyan-300 bg-clip-text text-transparent">
+                Water Crisis Platform
+              </h1>
             </div>
-
-            <div>
-              📊 Predict Water Scarcity
-            </div>
-
-            <div>
-              🛰️ GIS Based Village Monitoring
-            </div>
-
-            <div>
-              🤖 AI Powered Recommendations
-            </div>
-
-            <div>
-              📈 Analytics Dashboard
-            </div>
-
+            <p className="text-xs text-sky-300 font-semibold tracking-widest uppercase mt-1">
+              Water Crisis Management
+            </p>
           </div>
 
+          {/* Sliding Photos & Captions */}
+          <div className="relative z-20 bg-slate-900/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 space-y-4">
+            <h3 className="text-xl font-bold text-sky-200 transition-all duration-500">
+              {carouselCaptions[slideIndex].title}
+            </h3>
+            <p className="text-sm opacity-90 leading-relaxed min-h-[72px] transition-all duration-500">
+              {carouselCaptions[slideIndex].desc}
+            </p>
+            
+            {/* Slide Indicators */}
+            <div className="flex gap-1.5 pt-2">
+              {carouselImages.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSlideIndex(idx)}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                    idx === slideIndex ? "w-8 bg-sky-400" : "w-2 bg-white/40"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Footer Text */}
+          <div className="relative z-20 text-xs opacity-60">
+            Satellite Link Connected • Live Decision Support
+          </div>
         </div>
 
-        {/* ===========================
-            RIGHT SIDE
-        ============================ */}
-
+        {/* RIGHT SIDE AUTH ACTION CARD */}
         <div className="p-10 md:p-14 flex flex-col justify-center">
+          {view === "login" && (
+            <>
+              <h2 className="text-4xl font-bold text-gray-800">Welcome Back 👋</h2>
+              <p className="text-gray-500 mt-2 mb-8">Sign in to continue to your dashboard</p>
+            </>
+          )}
 
-          <h2 className="text-4xl font-bold text-gray-800">
-            Welcome Back 👋
-          </h2>
+          {view === "forgot" && (
+            <>
+              <h2 className="text-4xl font-bold text-gray-800">Forgot Password? 🔑</h2>
+              <p className="text-gray-500 mt-2 mb-8">Enter your registered email to receive an OTP</p>
+            </>
+          )}
 
-          <p className="text-gray-500 mt-2 mb-8">
-            Sign in to continue to your dashboard
-          </p>
+          {view === "reset" && (
+            <>
+              <h2 className="text-4xl font-bold text-gray-800">Reset Password 🛡️</h2>
+              <p className="text-gray-500 mt-2 mb-8">Enter the verification code and your new password</p>
+            </>
+          )}
 
-          <form onSubmit={handleLogin} className="space-y-5">
-
-            {/* Email */}
-
-            <div>
-
-              <label className="block mb-2 font-medium text-gray-700">
-                Email Address
-              </label>
-
-              <input
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-
-            </div>            {/* Password */}
-
-            <div>
-
-              <label className="block mb-2 font-medium text-gray-700">
-                Password
-              </label>
-
-              <PasswordInput
-                value={password}
-                onChange={setPassword}
-              />
-
+          {/* Success Alerts */}
+          {successMessage && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 mb-5">
+              {successMessage}
             </div>
+          )}
 
-            {/* Remember Me + Forgot Password */}
+          {/* Error Alerts */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 mb-5">
+              {error}
+            </div>
+          )}
 
-            <div className="flex items-center justify-between">
-
-              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-
+          {/* LOGIN VIEW FORM */}
+          {view === "login" && (
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">Email Address</label>
                 <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  required
                 />
-
-                Remember Me
-
-              </label>
-
-              <button
-                type="button"
-                className="text-cyan-700 text-sm hover:underline"
-              >
-                Forgot Password?
-              </button>
-
-            </div>
-
-            {/* Error */}
-
-            {error && (
-
-              <div className="bg-red-100 border border-red-300 text-red-700 rounded-xl px-4 py-3">
-
-                {error}
-
               </div>
 
-            )}
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">Password</label>
+                <PasswordInput value={password} onChange={setPassword} />
+              </div>
 
-            {/* Login Button */}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className={`w-full py-3 rounded-xl font-semibold text-white transition-all duration-300 ${
-                loading
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-cyan-600 hover:bg-cyan-700"
-              }`}
-            >
-              {loading ? "Logging in..." : "Login"}
-            </button>
-
-            {/* Divider */}
-
-            <div className="flex items-center gap-3">
-
-              <div className="flex-1 h-px bg-gray-300"></div>
-
-              <span className="text-gray-500 text-sm">
-                OR
-              </span>
-
-              <div className="flex-1 h-px bg-gray-300"></div>
-
-            </div>
-
-            {/* Google Button */}
-
-            <GoogleLoginButton />            {/* Create Account */}
-
-            <div className="text-center">
-
-              <p className="text-gray-600">
-
-                Don't have an account?{" "}
-
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded text-cyan-600 focus:ring-cyan-500"
+                  />
+                  Remember Me
+                </label>
                 <button
                   type="button"
-                  onClick={() => navigate("/signup")}
+                  onClick={() => {
+                    setView("forgot");
+                    setError("");
+                    setSuccessMessage("");
+                  }}
+                  className="text-cyan-700 text-sm hover:underline"
+                >
+                  Forgot Password?
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={`w-full py-3 rounded-xl font-semibold text-white transition-all duration-300 ${
+                  loading ? "bg-gray-400 cursor-not-allowed" : "bg-cyan-600 hover:bg-cyan-700"
+                }`}
+              >
+                {loading ? "Logging in..." : "Login"}
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-300"></div>
+                <span className="text-gray-500 text-sm">OR</span>
+                <div className="flex-1 h-px bg-gray-300"></div>
+              </div>
+
+              <GoogleLoginButton />
+
+              <div className="text-center">
+                <p className="text-gray-600">
+                  Don't have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigate("/signup")}
+                    className="text-cyan-700 font-semibold hover:underline"
+                  >
+                    Create Account
+                  </button>
+                </p>
+              </div>
+            </form>
+          )}
+
+          {/* FORGOT PASSWORD VIEW FORM */}
+          {view === "forgot" && (
+            <form onSubmit={handleForgotPassword} className="space-y-5">
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="Enter your registered email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={`w-full py-3 rounded-xl font-semibold text-white transition-all duration-300 ${
+                  loading ? "bg-gray-400 cursor-not-allowed" : "bg-cyan-600 hover:bg-cyan-700"
+                }`}
+              >
+                {loading ? "Sending OTP..." : "Send OTP Code"}
+              </button>
+
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView("login");
+                    setError("");
+                    setSuccessMessage("");
+                  }}
                   className="text-cyan-700 font-semibold hover:underline"
                 >
-                  Create Account
+                  ← Back to Login
                 </button>
+              </div>
+            </form>
+          )}
 
-              </p>
+          {/* RESET PASSWORD VIEW FORM */}
+          {view === "reset" && (
+            <form onSubmit={handleResetPassword} className="space-y-5">
+              <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex justify-between items-center text-sm">
+                <span className="text-gray-600">Resetting for: <strong>{email}</strong></span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView("forgot");
+                    setError("");
+                    setSuccessMessage("");
+                  }}
+                  className="text-cyan-700 hover:underline font-semibold"
+                >
+                  Change
+                </button>
+              </div>
 
-            </div>
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">6-Digit Verification Code (OTP)</label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  placeholder="Enter 6-digit OTP"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                  className="w-full border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500 font-mono text-center text-lg tracking-widest"
+                  required
+                />
+              </div>
 
-          </form>
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">New Password</label>
+                <PasswordInput value={newPassword} onChange={setNewPassword} />
+              </div>
+
+              <div>
+                <label className="block mb-2 font-medium text-gray-700">Confirm New Password</label>
+                <PasswordInput value={confirmPassword} onChange={setConfirmPassword} />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={`w-full py-3 rounded-xl font-semibold text-white transition-all duration-300 ${
+                  loading ? "bg-gray-400 cursor-not-allowed" : "bg-cyan-600 hover:bg-cyan-700"
+                }`}
+              >
+                {loading ? "Resetting password..." : "Reset Password"}
+              </button>
+
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView("login");
+                    setError("");
+                    setSuccessMessage("");
+                  }}
+                  className="text-cyan-700 font-semibold hover:underline"
+                >
+                  ← Cancel and Back to Login
+                </button>
+              </div>
+            </form>
+          )}
 
           {/* Footer */}
-
           <div className="mt-10 text-center text-sm text-gray-500">
-
-            <p>
-              Secure Authentication powered by FastAPI + JWT
-            </p>
-
-            <p className="mt-2">
-              © 2026 Water Crisis Platform
-            </p>
-
+            <p>Secure Authentication powered by FastAPI + JWT</p>
+            <p className="mt-2">© 2026 Water Crisis Platform</p>
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }
-
-            

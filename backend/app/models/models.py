@@ -188,3 +188,14 @@ class AIConversation(Base):
     assistant_response = Column(Text, nullable=False)
     context = Column(Text)  # JSON string of context data
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+# Password Reset OTP Model
+class PasswordResetOTP(Base):
+    __tablename__ = "password_reset_otps"
+    
+    id = Column(Integer, primary_key=True)
+    email = Column(String(255), index=True, nullable=False)
+    otp_code = Column(String(6), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    is_verified = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

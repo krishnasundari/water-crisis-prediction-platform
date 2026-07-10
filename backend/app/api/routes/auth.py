@@ -1,13 +1,21 @@
 from google.oauth2 import id_token
 from google.auth.transport import requests
-from app.schemas.schemas import GoogleLoginRequest
 import os
+import random
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import timedelta
 
 from app.db.database import get_db
-from app.schemas.schemas import LoginRequest, TokenResponse, UserCreate, UserResponse
+from app.schemas.schemas import (
+    LoginRequest, 
+    TokenResponse, 
+    UserCreate, 
+    UserResponse,
+    GoogleLoginRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest
+)
 from app.services.auth_service import (
     authenticate_user,
     create_access_token,
@@ -17,7 +25,8 @@ from app.services.auth_service import (
     decode_token,
     hash_password,
 )
-from app.models.models import User
+from app.models.models import User, PasswordResetOTP, Role
+from app.services.email_service import send_otp_email
 
 router = APIRouter()
 
@@ -35,20 +44,23 @@ async def register(user_create: UserCreate, db: Session = Depends(get_db)):
     db_user = register_user(db, user_create)
     
     return UserResponse(
-    id=db_user.id,
-    email=db_user.email,
-    username=db_user.username,
-    full_name=db_user.full_name,
-    role=db_user.role.name if db_user.role else None,
-    is_active=db_user.is_active,
-    created_at=db_user.created_at,
-)@router.post("/google", response_model=TokenResponse)
+        id=db_user.id,
+        email=db_user.email,
+        username=db_user.username,
+        full_name=db_user.full_name,
+        role=db_user.role.name if db_user.role else None,
+        is_active=db_user.is_active,
+        created_at=db_user.created_at,
+    )
+
+@router.post("/google", response_model=TokenResponse)
 async def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
     try:
+        from app.core.config import settings
         user_info = id_token.verify_oauth2_token(
             data.credential,
             requests.Request(),
-            os.getenv("GOOGLE_CLIENT_ID"),
+            settings.GOOGLE_CLIENT_ID,
         )
 
         email = user_info["email"]
@@ -60,12 +72,15 @@ async def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
 
         # Create user if not found
         if not user:
+            role = db.query(Role).filter(Role.name == "government_officer").first()
+            role_id = role.id if role else 3
+            
             user = User(
                 email=email,
                 username=username,
                 full_name=name,
                 hashed_password=hash_password("GOOGLE_AUTH_USER"),
-                role_id=3,
+                role_id=role_id,
                 is_active=True,
             )
 
@@ -88,6 +103,76 @@ async def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
             status_code=401,
             detail=str(e),
         )
+
+@router.post("/forgot-password")
+async def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    email = data.email.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email address not registered on this platform."
+        )
+        
+    # Generate 6-digit numeric OTP
+    otp = f"{random.randint(100000, 999999)}"
+    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    
+    # Delete any existing OTP entries for this email
+    db.query(PasswordResetOTP).filter(PasswordResetOTP.email == email).delete()
+    
+    # Create new OTP entry
+    db_otp = PasswordResetOTP(
+        email=email,
+        otp_code=otp,
+        expires_at=expires_at,
+        is_verified=False
+    )
+    db.add(db_otp)
+    db.commit()
+    
+    # Send email containing OTP code
+    await send_otp_email(email, otp)
+    
+    return {"message": "Verification OTP code sent to your email successfully."}
+
+@router.post("/reset-password")
+async def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
+    email = data.email.strip().lower()
+    otp_code = data.otp_code.strip()
+    
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email address not found."
+        )
+        
+    db_otp = db.query(PasswordResetOTP).filter(
+        PasswordResetOTP.email == email,
+        PasswordResetOTP.otp_code == otp_code
+    ).first()
+    
+    if not db_otp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP verification code."
+        )
+        
+    if db_otp.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification code has expired."
+        )
+        
+    # Update password using direct bcrypt hashing
+    user.hashed_password = hash_password(data.new_password)
+    
+    # Invalidate OTP entry
+    db.delete(db_otp)
+    db.commit()
+    
+    return {"message": "Password updated successfully. Please log in with your new credentials."}
 @router.post("/login", response_model=TokenResponse)
 async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     """

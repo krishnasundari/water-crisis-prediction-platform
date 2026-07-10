@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
+# Seed roles and default admin user
+from app.db.seed import seed_database
+seed_database()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
@@ -48,6 +52,7 @@ app.add_middleware(
     allowed_hosts=[
         "localhost",
         "127.0.0.1",
+        "testserver",
         "*.onrender.com",
         "*.render.com",
         "*.railway.app",

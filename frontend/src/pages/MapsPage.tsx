@@ -11,7 +11,9 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 const API =
-  "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
+  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://localhost:8000/api/v1"
+    : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
 
 // ============================
 // Marker Icons

@@ -286,3 +286,11 @@ class ErrorResponse(BaseModel):
     timestamp: datetime
 class GoogleLoginRequest(BaseModel):
     credential: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    otp_code: str
+    new_password: str

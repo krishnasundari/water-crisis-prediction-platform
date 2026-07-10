@@ -1,20 +1,30 @@
 const API_BASE_URL =
-  "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
+  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    ? "http://localhost:8000/api/v1"
+    : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
 
 async function request(
   endpoint: string,
   options: RequestInit = {}
 ) {
+  const token = localStorage.getItem("access_token");
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string> || {}),
+  };
+  
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+    headers,
     ...options,
   });
 
   if (!response.ok) {
-    throw new Error("Request failed");
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.detail || "Request failed");
   }
 
   return response.json();
@@ -24,6 +34,26 @@ async function request(
 export const authAPI = {
   login: (data: any) =>
     request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  register: (data: any) =>
+    request("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  googleLogin: (credential: string) =>
+    request("/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ credential }),
+    }),
+  forgotPassword: (email: string) =>
+    request("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (data: any) =>
+    request("/auth/reset-password", {
       method: "POST",
       body: JSON.stringify(data),
     }),

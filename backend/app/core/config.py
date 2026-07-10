@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4"
     
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str = "477358386706-ru8cmef0bgtclpvfhqsrf1fq1ddbc76r.apps.googleusercontent.com"
+    
     # Email Settings
     SMTP_SERVER: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
