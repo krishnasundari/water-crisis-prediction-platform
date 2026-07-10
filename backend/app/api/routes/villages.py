@@ -132,11 +132,12 @@ def get_village_live_status(village_id: int, db: Session = Depends(get_db)):
     
     if nearest_res:
         dam_name = nearest_res.name
-        simulated_dam_level = nearest_res.current_level
+        base_pct = round((nearest_res.current_level / nearest_res.capacity) * 100, 2)
+        simulated_dam_level = base_pct
         # Hydrological Simulation: If it's currently raining, increase water levels
         if live_rain > 0 and min_dist < 250:
             rain_fill_factor = live_rain * 0.15
-            simulated_dam_level = min(100.0, round(nearest_res.current_level + rain_fill_factor, 2))
+            simulated_dam_level = min(100.0, round(base_pct + rain_fill_factor, 2))
             
     # 4. Fetch most recent groundwater depth for the village
     gw_record = db.query(GroundwaterRecord).filter(

@@ -123,24 +123,25 @@ def search_weather_and_reservoirs(db: Session, query: str) -> Dict[str, Any]:
         
         # Hydrological Simulation: If it is currently raining in this region,
         # let's dynamically simulate water level changes on the fly!
-        simulated_level = res.current_level
+        base_pct = round((res.current_level / res.capacity) * 100, 2)
+        simulated_pct = base_pct
         if live_rain > 0 and dist < 250: # Close proximity
             # Dynamic simulation: 1mm of rain adds 0.15% to dam level
             rain_fill_factor = live_rain * 0.15
-            simulated_level = min(100.0, round(res.current_level + rain_fill_factor, 2))
+            simulated_pct = min(100.0, round(base_pct + rain_fill_factor, 2))
             
         nearby_reservoirs.append({
             "id": res.id,
             "name": res.name,
             "capacity": res.capacity,
-            "original_level": res.current_level,
-            "current_level": simulated_level, # simulated live level
+            "original_level": base_pct,
+            "current_level": simulated_pct, # simulated live percentage level
             "district": res.district,
             "state": res.state,
             "latitude": res.latitude,
             "longitude": res.longitude,
-            "distance_km": dist,
-            "inflow_added_pct": round(simulated_level - res.current_level, 2)
+            "distance_km": round(dist, 2),
+            "inflow_added_pct": round(simulated_pct - base_pct, 2)
         })
         
     # Sort nearby reservoirs by distance

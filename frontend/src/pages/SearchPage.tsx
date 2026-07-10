@@ -173,6 +173,39 @@ export default function SearchPage() {
   const nearestReservoir = data?.nearby_reservoirs?.[0];
   const projectedDamLevel = nearestReservoir ? getProjectedLevel(nearestReservoir.current_level) : 50;
 
+  // Dynamic distance calculation helper (Haversine formula)
+  const calculateDistanceInKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Radius of the earth in km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c * 100) / 100;
+  };
+
+  // Find villages near the active reservoir
+  const nearbyImpactedVillages = nearestReservoir
+    ? allVillages
+        .map((v) => ({
+          ...v,
+          distance_to_dam: calculateDistanceInKm(
+            nearestReservoir.latitude,
+            nearestReservoir.longitude,
+            v.latitude,
+            v.longitude
+          ),
+        }))
+        // Only show registered villages within 150 km of the dam
+        .filter((v) => v.distance_to_dam < 150)
+        .sort((a, b) => a.distance_to_dam - b.distance_to_dam)
+        .slice(0, 3)
+    : [];
+
   // Evacuation coordinates
   const targetLatitude = activeCoordinates[0];
   const targetLongitude = activeCoordinates[1];
@@ -527,18 +560,13 @@ export default function SearchPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/30">
-                    {/* Display mock impacted villages nearby */}
-                    {[
-                      { name: "Kuttanad Lowlands", dist: 3.2, pop: 4500 },
-                      { name: "Edappally Settlement", dist: 7.8, pop: 12000 },
-                      { name: "Vyttila Ward", dist: 12.4, pop: 6800 },
-                    ].map((village) => {
-                      const statusInfo = getVillageFloodStatus(village.dist, projectedDamLevel);
+                    {nearbyImpactedVillages.map((village) => {
+                      const statusInfo = getVillageFloodStatus(village.distance_to_dam, projectedDamLevel);
                       return (
-                        <tr key={village.name} className="hover:bg-slate-700/10">
+                        <tr key={village.id} className="hover:bg-slate-700/10">
                           <td className="py-4 font-bold text-slate-200">{village.name}</td>
-                          <td className="py-4 font-mono font-semibold text-sky-400">{village.dist} km</td>
-                          <td className="py-4 text-slate-300">{village.pop.toLocaleString()}</td>
+                          <td className="py-4 font-mono font-semibold text-sky-400">{village.distance_to_dam} km</td>
+                          <td className="py-4 text-slate-300">{(village.population || 1000).toLocaleString()}</td>
                           <td className="py-4">
                             <span className={statusInfo.color}>{statusInfo.status}</span>
                           </td>
@@ -554,6 +582,13 @@ export default function SearchPage() {
                         </tr>
                       );
                     })}
+                    {nearbyImpactedVillages.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-6 text-center text-slate-500 italic">
+                          🟢 Safe Zone: No registered downstream villages within flood threat range (150km) of this reservoir.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
