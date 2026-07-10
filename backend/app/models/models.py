@@ -129,6 +129,10 @@ class Prediction(Base):
     population = Column(Integer)
     reservoir_capacity = Column(Float)
     groundwater_level = Column(Float)
+    flood_probability = Column(Float)
+    flood_severity = Column(String(30))
+    confidence_score = Column(Float)
+    expected_impact = Column(String(500))
     prediction_date = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

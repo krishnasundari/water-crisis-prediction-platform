@@ -3,7 +3,7 @@ import requests
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models.models import Reservoir, Village, RainfallRecord, GroundwaterRecord, Prediction, Alert
-from app.ml.models.predictor import predict_water_crisis
+from app.ml.models.predictor import predict_water_crisis, predict_flood_risk
 from app.core.websocket_manager import manager
 from app.services.weather_service import calculate_distance
 
@@ -186,12 +186,36 @@ async def sync_all_data(db: Session):
         if nearest_res:
             dam_pct = (nearest_res.current_level / nearest_res.capacity) * 100
             
-        # Run ML Predictor
+        # Find nearest river to village
+        from app.models.models import River
+        rivers_list = db.query(River).all()
+        nearest_riv = None
+        min_riv_dist = float("inf")
+        for riv in rivers_list:
+            dist = calculate_distance(lat, lon, riv.latitude, riv.longitude)
+            if dist < min_riv_dist:
+                min_riv_dist = dist
+                nearest_riv = riv
+                
+        riv_lvl = nearest_riv.river_level if nearest_riv else 3.5
+        danger_lvl = nearest_riv.danger_level if nearest_riv else 5.0
+        
+        # Run Water Crisis ML Predictor
         result = predict_water_crisis(
             rainfall=rain,
             population=v.population or 5000,
             reservoir_capacity=dam_pct,
             groundwater_level=new_depth
+        )
+        
+        # Run Flood Predictor
+        flood_result = predict_flood_risk(
+            rainfall=rain,
+            river_level=riv_lvl,
+            danger_level=danger_lvl,
+            reservoir_capacity=dam_pct,
+            humidity=humidity,
+            cloud_cover=cloud_cover
         )
         
         # Save Prediction Record
@@ -203,6 +227,10 @@ async def sync_all_data(db: Session):
             groundwater_level=new_depth,
             risk_score=result["risk_score"],
             risk_level=result["risk_level"],
+            flood_probability=flood_result["flood_probability"],
+            flood_severity=flood_result["flood_severity"],
+            confidence_score=flood_result["confidence_score"],
+            expected_impact=flood_result["expected_impact"],
             prediction_date=datetime.now()
         )
         db.add(new_pred)

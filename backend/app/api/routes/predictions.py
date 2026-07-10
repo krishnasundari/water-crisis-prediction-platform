@@ -8,7 +8,7 @@ from app.models.models import Prediction
 from app.schemas.schemas import PredictionRequest
 
 # ML Predictor
-from app.ml.models.predictor import predict_water_crisis
+from app.ml.models.predictor import predict_water_crisis, predict_flood_risk
 
 router = APIRouter()
 
@@ -42,6 +42,33 @@ def create_prediction(
         groundwater_level=groundwater_level,
     )
 
+    # Fetch village coordinates to find closest river
+    from app.models.models import Village, River
+    v = db.query(Village).filter(Village.id == prediction.village_id).first()
+    lat = v.latitude if v else 20.0
+    lon = v.longitude if v else 78.0
+    
+    rivers_list = db.query(River).all()
+    nearest_riv = None
+    min_riv_dist = float("inf")
+    for riv in rivers_list:
+        dist = calculate_distance(lat, lon, riv.latitude, riv.longitude)
+        if dist < min_riv_dist:
+            min_riv_dist = dist
+            nearest_riv = riv
+            
+    riv_lvl = nearest_riv.river_level if nearest_riv else 3.5
+    danger_lvl = nearest_riv.danger_level if nearest_riv else 5.0
+    
+    flood_result = predict_flood_risk(
+        rainfall=rainfall,
+        river_level=riv_lvl,
+        danger_level=danger_lvl,
+        reservoir_capacity=reservoir_capacity,
+        humidity=75.0, # Default manual constant
+        cloud_cover=60.0 # Default manual constant
+    )
+
     new_prediction = Prediction(
         village_id=prediction.village_id,
         rainfall=rainfall,
@@ -50,6 +77,10 @@ def create_prediction(
         groundwater_level=groundwater_level,
         risk_score=result["risk_score"],
         risk_level=result["risk_level"],
+        flood_probability=flood_result["flood_probability"],
+        flood_severity=flood_result["flood_severity"],
+        confidence_score=flood_result["confidence_score"],
+        expected_impact=flood_result["expected_impact"],
         prediction_date=datetime.now(),
     )
 
