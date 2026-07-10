@@ -6,7 +6,7 @@ import logging
 
 from app.core.config import settings
 from app.db.database import engine, Base, SessionLocal
-from app.api.routes import auth, villages, reservoirs, predictions, forecasts, alerts, reports, dashboard, ai_assistant, analytics, weather, websocket
+from app.api.routes import auth, villages, reservoirs, predictions, forecasts, alerts, reports, dashboard, ai_assistant, analytics, weather, websocket, rivers
 import asyncio
 from app.services.sync_service import sync_all_data
 
@@ -109,6 +109,7 @@ app.include_router(
 app.include_router(ai_assistant.router, prefix="/api/v1/ai", tags=["AI Assistant"])
 app.include_router(weather.router, prefix="/api/v1/weather", tags=["Live Weather Search"])
 app.include_router(websocket.router, prefix="/api/v1")
+app.include_router(rivers.router, prefix="/api/v1/rivers", tags=["Rivers"])
 
 @app.get("/", tags=["System"])
 async def root():

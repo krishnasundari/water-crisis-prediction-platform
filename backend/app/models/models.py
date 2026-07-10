@@ -230,3 +230,31 @@ class ReservoirHistory(Base):
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())
     
     reservoir = relationship("Reservoir")
+
+# River Model
+class River(Base):
+    __tablename__ = "rivers"
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    river_level = Column(Float, nullable=False) # Current level in meters
+    danger_level = Column(Float, nullable=False) # Danger level in meters
+    flow_rate = Column(Float, nullable=False) # Flow rate in m3/s
+    trend = Column(String(20), default="Steady") # "Rising", "Falling", "Steady"
+    latitude = Column(Float)
+    longitude = Column(Float)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+# River History Model
+class RiverHistory(Base):
+    __tablename__ = "river_history"
+    
+    id = Column(Integer, primary_key=True)
+    river_id = Column(Integer, ForeignKey("rivers.id"), nullable=False)
+    river_level = Column(Float, nullable=False)
+    flow_rate = Column(Float, nullable=False)
+    trend = Column(String(20), nullable=False)
+    recorded_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    river = relationship("River")

@@ -101,6 +101,42 @@ def seed_database():
             db.commit()
             print("Villages seeded successfully!")
 
+        # 5. Seed Rivers
+        from app.models.models import River
+        rivers_count = db.query(River).count()
+        if rivers_count == 0:
+            print("Seeding database rivers...")
+            ganges = River(
+                name="ganges",
+                river_level=8.5,
+                danger_level=12.0,
+                flow_rate=1200.0,
+                trend="Rising",
+                latitude=25.3176,
+                longitude=82.9739
+            )
+            yamuna = River(
+                name="yamuna",
+                river_level=6.2,
+                danger_level=9.0,
+                flow_rate=850.0,
+                trend="Falling",
+                latitude=26.4499,
+                longitude=80.3319
+            )
+            godavari = River(
+                name="godavari",
+                river_level=11.8,
+                danger_level=15.0,
+                flow_rate=2100.0,
+                trend="Rising",
+                latitude=16.9891,
+                longitude=81.7828
+            )
+            db.add_all([ganges, yamuna, godavari])
+            db.commit()
+            print("Rivers seeded successfully!")
+
     except Exception as e:
         db.rollback()
         print(f"Error seeding database: {str(e)}")

@@ -228,8 +228,82 @@ async def sync_all_data(db: Session):
                 )
                 db.add(new_alert)
                 
+    # 3. Update Rivers & flow rates
+    from app.models.models import River, RiverHistory
+    rivers = db.query(River).all()
+    for r in rivers:
+        # Get latest rainfall near the river coordinates (we'll query RainfallRecord for the closest reservoir)
+        reservoirs = db.query(Reservoir).all()
+        nearest_res = None
+        min_dist = float("inf")
+        for res in reservoirs:
+            dist = calculate_distance(r.latitude, r.longitude, res.latitude, res.longitude)
+            if dist < min_dist:
+                min_dist = dist
+                nearest_res = res
+                
+        rain = 0.0
+        if nearest_res:
+            latest_rain = db.query(RainfallRecord).filter(
+                RainfallRecord.reservoir_id == nearest_res.id
+            ).order_by(RainfallRecord.measurement_date.desc()).first()
+            if latest_rain:
+                rain = latest_rain.rainfall_amount
+                
+        # Update level and flow rates
+        if rain > 15.0:
+            r.trend = "Rising"
+            r.river_level = round(r.river_level + (rain * 0.08), 2)
+            r.flow_rate = round(r.flow_rate + (rain * 25.0), 2)
+        else:
+            r.trend = "Falling"
+            # slow recession back to a base level
+            base_level = 3.0
+            if "yamuna" in r.name.lower():
+                base_level = 2.0
+            elif "godavari" in r.name.lower():
+                base_level = 4.0
+            elif "ganges" in r.name.lower():
+                base_level = 5.0
+                
+            r.river_level = max(base_level, round(r.river_level - 0.05, 2))
+            r.flow_rate = max(150.0, round(r.flow_rate - 15.0, 2))
+            
+        db.add(r)
+        
+        # Trigger River Flood Alert check
+        if r.river_level >= r.danger_level:
+            alert_msg = f"🌊 River Flood Alert: {r.name.upper()} has breached the critical danger level! Current: {r.river_level}m (Danger mark: {r.danger_level}m, Flow rate: {r.flow_rate} m3/s)."
+            
+            # Check if this alert has already been raised today
+            today_alert = db.query(Alert).filter(
+                Alert.alert_type == "flood",
+                Alert.message.like(f"%{r.name.upper()}%"),
+                Alert.created_at >= datetime.now().replace(hour=0, minute=0, second=0)
+            ).first()
+            
+            if not today_alert:
+                new_alert = Alert(
+                    alert_type="flood",
+                    severity="high",
+                    message=alert_msg,
+                    is_read=False,
+                    created_at=datetime.now()
+                )
+                db.add(new_alert)
+                
+        # Log to RiverHistory table
+        r_history = RiverHistory(
+            river_id=r.id,
+            river_level=r.river_level,
+            flow_rate=r.flow_rate,
+            trend=r.trend,
+            recorded_at=datetime.now()
+        )
+        db.add(r_history)
+
     db.commit()
-    print("Villages water monitoring, ML models inference, and alert levels synced.")
+    print("Villages, dams, rivers telemetry, ML models inference, and alerts synced.")
     
     # Broadcast event via WebSocket
     await manager.broadcast({

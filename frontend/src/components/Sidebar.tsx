@@ -129,6 +129,12 @@ export default function Sidebar() {
         >
           🛡️ Dam Monitor
         </li>
+        <li
+          style={{ cursor: "pointer", marginBottom: "12px" }}
+          onClick={() => navigate("/river-monitoring")}
+        >
+          🌊 River Monitor
+        </li>
       </ul>
     </div>
   );
