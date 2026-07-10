@@ -99,6 +99,12 @@ export default function Sidebar() {
         >
           🤖 AI Assistant
         </li>
+        <li
+          style={{ cursor: "pointer", marginBottom: "12px" }}
+          onClick={() => navigate("/search")}
+        >
+          🔍 Live Search
+        </li>
       </ul>
     </div>
   );

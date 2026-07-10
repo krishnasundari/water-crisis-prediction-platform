@@ -14,6 +14,7 @@ import PredictionsPage from './pages/PredictionsPage'
 import MapsPage from './pages/MapsPage'
 import ReportsPage from './pages/ReportsPage'
 import AIAssistantPage from './pages/AIAssistantPage'
+import SearchPage from './pages/SearchPage'
 
 function App() {
   return (
@@ -101,6 +102,14 @@ function App() {
   element={
     <ProtectedRoute>
       <AIAssistantPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/search"
+  element={
+    <ProtectedRoute>
+      <SearchPage />
     </ProtectedRoute>
   }
 />

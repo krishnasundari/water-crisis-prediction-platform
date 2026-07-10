@@ -139,3 +139,8 @@ export const aiAPI = {
       method: "DELETE",
     }),
 };
+
+// Live Weather & Reservoir Search
+export const weatherAPI = {
+  search: (query: string) => request(`/weather/search?query=${encodeURIComponent(query)}`),
+};
