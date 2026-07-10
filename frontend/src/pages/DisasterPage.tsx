@@ -10,6 +10,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import useWebSocket from "../hooks/useWebSocket";
 
 // Helper component to center map on search results
 function ChangeView({ center, zoom }: { center: [number, number]; zoom: number }) {
@@ -41,13 +42,30 @@ export default function DisasterPage() {
       : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
   };
 
-  // Fetch active alerts on mount
-  useEffect(() => {
+  const loadAlerts = () => {
     fetch(`${getBaseURL()}/alerts/`)
       .then((res) => res.json())
       .then((data) => setAlerts(data))
       .catch((err) => console.error("Error fetching alerts:", err));
+  };
+
+  // Fetch active alerts on mount
+  useEffect(() => {
+    loadAlerts();
   }, []);
+
+  useWebSocket((event) => {
+    if (event === "sync_complete") {
+      console.log("Telemetry sync complete. Refreshing disaster monitoring components.");
+      loadAlerts();
+      if (data?.location?.name) {
+        fetch(`${getBaseURL()}/predictions/disaster/live?query=${encodeURIComponent(data.location.name)}`)
+          .then((res) => res.json())
+          .then((result) => setData(result))
+          .catch((err) => console.error(err));
+      }
+    }
+  });
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
