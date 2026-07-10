@@ -18,6 +18,7 @@ import SearchPage from './pages/SearchPage'
 import DisasterPage from "./pages/DisasterPage";
 import WeatherPage from "./pages/WeatherPage";
 import RainfallPage from "./pages/RainfallPage";
+import DamPage from "./pages/DamPage";
 
 function App() {
   return (
@@ -137,6 +138,14 @@ function App() {
   element={
     <ProtectedRoute>
       <RainfallPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/dam-monitoring"
+  element={
+    <ProtectedRoute>
+      <DamPage />
     </ProtectedRoute>
   }
 />

@@ -217,3 +217,16 @@ class WeatherHistory(Base):
     visibility = Column(Float)
     condition = Column(String(100))
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())
+
+# Reservoir History Model
+class ReservoirHistory(Base):
+    __tablename__ = "reservoir_history"
+    
+    id = Column(Integer, primary_key=True)
+    reservoir_id = Column(Integer, ForeignKey("reservoirs.id"), nullable=False)
+    water_level = Column(Float, nullable=False)
+    inflow = Column(Float)
+    outflow = Column(Float)
+    recorded_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    reservoir = relationship("Reservoir")

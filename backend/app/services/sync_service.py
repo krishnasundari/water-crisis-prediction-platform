@@ -56,8 +56,32 @@ async def sync_all_data(db: Session):
         res.current_level = min(res.capacity, res.current_level + inflow)
         db.add(res)
         
+        # Outflow calculation based on dam capacity levels
+        pct = (res.current_level / res.capacity) * 100
+        if pct >= 100:
+            outflow = 8.5
+        elif pct >= 90:
+            outflow = 4.5
+        elif pct >= 75:
+            outflow = 2.5
+        elif pct >= 50:
+            outflow = 1.2
+        else:
+            outflow = 0.4
+            
+        # Log to ReservoirHistory snapshot table
+        from app.models.models import ReservoirHistory
+        res_history = ReservoirHistory(
+            reservoir_id=res.id,
+            water_level=res.current_level,
+            inflow=inflow,
+            outflow=outflow,
+            recorded_at=datetime.now()
+        )
+        db.add(res_history)
+        
     db.commit()
-    print("Dams levels and rainfall logging synced.")
+    print("Dams levels, outflow updates, and history logging synced.")
     
     # 2. Update Villages & ML predictions
     villages = db.query(Village).all()
