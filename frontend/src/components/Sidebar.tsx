@@ -111,6 +111,12 @@ export default function Sidebar() {
         >
           🛡️ National Disasters
         </li>
+        <li
+          style={{ cursor: "pointer", marginBottom: "12px" }}
+          onClick={() => navigate("/weather-monitoring")}
+        >
+          🌧️ Weather Monitor
+        </li>
       </ul>
     </div>
   );

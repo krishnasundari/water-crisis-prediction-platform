@@ -199,3 +199,21 @@ class PasswordResetOTP(Base):
     expires_at = Column(DateTime, nullable=False)
     is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+# Weather History Model
+class WeatherHistory(Base):
+    __tablename__ = "weather_history"
+    
+    id = Column(Integer, primary_key=True)
+    location_name = Column(String(255), nullable=False, index=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    temperature = Column(Float)
+    humidity = Column(Float)
+    pressure = Column(Float)
+    rainfall = Column(Float)
+    wind_speed = Column(Float)
+    cloud_cover = Column(Float)
+    visibility = Column(Float)
+    condition = Column(String(100))
+    recorded_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -12,10 +12,9 @@ import DashboardPage from './pages/DashboardPage'
 import VillagesPage from './pages/VillagesPage'
 import PredictionsPage from './pages/PredictionsPage'
 import MapsPage from './pages/MapsPage'
-import ReportsPage from './pages/ReportsPage'
-import AIAssistantPage from './pages/AIAssistantPage'
 import SearchPage from './pages/SearchPage'
 import DisasterPage from "./pages/DisasterPage";
+import WeatherPage from "./pages/WeatherPage";
 
 function App() {
   return (
@@ -119,6 +118,14 @@ function App() {
   element={
     <ProtectedRoute>
       <DisasterPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/weather-monitoring"
+  element={
+    <ProtectedRoute>
+      <WeatherPage />
     </ProtectedRoute>
   }
 />

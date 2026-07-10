@@ -65,25 +65,65 @@ async def sync_all_data(db: Session):
         lat = v.latitude
         lon = v.longitude
         
-        # Query Open-Meteo current rain & temp
+        # Query Open-Meteo current rain, temp, and other parameters
         w_url = "https://api.open-meteo.com/v1/forecast"
         w_params = {
             "latitude": lat,
             "longitude": lon,
-            "current": "precipitation,temperature_2m",
+            "current": "precipitation,temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,cloud_cover,visibility,weather_code",
             "timezone": "auto"
         }
         
         rain = 0.0
         temp = 25.0
+        humidity = 50.0
+        pressure = 1013.25
+        wind_speed = 10.0
+        cloud_cover = 0.0
+        visibility = 10.0
+        weather_code = 0
         try:
             resp = requests.get(w_url, params=w_params, timeout=5)
             if resp.ok:
                 current = resp.json().get("current", {})
                 rain = current.get("precipitation", 0.0) or 0.0
                 temp = current.get("temperature_2m", 25.0)
+                humidity = current.get("relative_humidity_2m", 50.0)
+                pressure = current.get("surface_pressure", 1013.25)
+                wind_speed = current.get("wind_speed_10m", 10.0)
+                cloud_cover = current.get("cloud_cover", 0.0)
+                visibility = (current.get("visibility", 10000.0) or 10000.0) / 1000.0
+                weather_code = current.get("weather_code", 0)
         except Exception as e:
             print(f"Error querying weather for village {v.name}: {str(e)}")
+            
+        # Log to WeatherHistory
+        from app.models.models import WeatherHistory
+        
+        def get_code_text(code: int) -> str:
+            mapping = {
+                0: "Clear Sky", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
+                45: "Foggy", 48: "Depositing Rime Fog", 51: "Light Drizzle", 53: "Moderate Drizzle",
+                55: "Dense Drizzle", 61: "Light Rain", 63: "Moderate Rain", 65: "Heavy Rain",
+                71: "Light Snow", 73: "Moderate Snow", 75: "Heavy Snow", 80: "Light Showers",
+                81: "Moderate Showers", 82: "Violent Showers", 95: "Thunderstorm", 96: "Thunderstorm with Hail"
+            }
+            return mapping.get(code, "Cloudy")
+            
+        w_history = WeatherHistory(
+            location_name=v.name,
+            latitude=lat,
+            longitude=lon,
+            temperature=temp,
+            humidity=humidity,
+            pressure=pressure,
+            rainfall=rain,
+            wind_speed=wind_speed,
+            cloud_cover=cloud_cover,
+            visibility=visibility,
+            condition=get_code_text(weather_code)
+        )
+        db.add(w_history)
             
         # Groundwater level calculation: rain recharges, default consumption lowers it
         latest_gw = db.query(GroundwaterRecord).filter(GroundwaterRecord.village_id == v.id).order_by(GroundwaterRecord.measurement_date.desc()).first()
