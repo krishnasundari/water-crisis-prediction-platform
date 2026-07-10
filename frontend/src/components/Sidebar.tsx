@@ -105,6 +105,12 @@ export default function Sidebar() {
         >
           🔍 Live Search
         </li>
+        <li
+          style={{ cursor: "pointer", marginBottom: "12px" }}
+          onClick={() => navigate("/disaster-monitoring")}
+        >
+          🛡️ National Disasters
+        </li>
       </ul>
     </div>
   );

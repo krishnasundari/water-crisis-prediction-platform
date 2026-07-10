@@ -15,6 +15,7 @@ import MapsPage from './pages/MapsPage'
 import ReportsPage from './pages/ReportsPage'
 import AIAssistantPage from './pages/AIAssistantPage'
 import SearchPage from './pages/SearchPage'
+import DisasterPage from "./pages/DisasterPage";
 
 function App() {
   return (
@@ -110,6 +111,14 @@ function App() {
   element={
     <ProtectedRoute>
       <SearchPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/disaster-monitoring"
+  element={
+    <ProtectedRoute>
+      <DisasterPage />
     </ProtectedRoute>
   }
 />
