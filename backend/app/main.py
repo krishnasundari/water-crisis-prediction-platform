@@ -5,8 +5,10 @@ from contextlib import asynccontextmanager
 import logging
 
 from app.core.config import settings
-from app.db.database import engine, Base
-from app.api.routes import auth, villages, reservoirs, predictions, forecasts, alerts, reports, dashboard, ai_assistant, analytics, weather
+from app.db.database import engine, Base, SessionLocal
+from app.api.routes import auth, villages, reservoirs, predictions, forecasts, alerts, reports, dashboard, ai_assistant, analytics, weather, websocket
+import asyncio
+from app.services.sync_service import sync_all_data
 
 # Configure logging
 logging.basicConfig(
@@ -22,11 +24,32 @@ Base.metadata.create_all(bind=engine)
 from app.db.seed import seed_database
 seed_database()
 
+async def background_sync_loop():
+    """Background task loop that executes data sync every 15 minutes"""
+    # Wait 10 seconds on boot before starting first sync run
+    await asyncio.sleep(10)
+    while True:
+        try:
+            logger.info("⏰ Background scheduler starting synchronization run...")
+            db = SessionLocal()
+            try:
+                await sync_all_data(db)
+            finally:
+                db.close()
+            logger.info("✅ Background scheduler synchronization run complete.")
+        except Exception as e:
+            logger.error(f"❌ Background scheduler failed: {str(e)}")
+        
+        # Wait 15 minutes (900 seconds) before running sync again
+        await asyncio.sleep(900)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     logger.info("🚀 Water Crisis Platform Backend Starting...")
+    sync_task = asyncio.create_task(background_sync_loop())
     yield
+    sync_task.cancel()
     logger.info("🛑 Water Crisis Platform Backend Shutting Down...")
 
 # Initialize FastAPI app
@@ -85,6 +108,7 @@ app.include_router(
 )
 app.include_router(ai_assistant.router, prefix="/api/v1/ai", tags=["AI Assistant"])
 app.include_router(weather.router, prefix="/api/v1/weather", tags=["Live Weather Search"])
+app.include_router(websocket.router, prefix="/api/v1")
 
 @app.get("/", tags=["System"])
 async def root():

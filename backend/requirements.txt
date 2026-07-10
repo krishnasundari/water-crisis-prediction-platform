@@ -38,6 +38,7 @@ python-dotenv==1.0.0
 requests==2.31.0
 httpx==0.25.2
 aiofiles==23.2.1
+websockets==16.1
 
 # PDF Generation
 reportlab==4.0.7

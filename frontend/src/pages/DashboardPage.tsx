@@ -14,6 +14,8 @@ import {
   Legend,
 } from "recharts";
 
+import useWebSocket from "../hooks/useWebSocket";
+
 export default function DashboardPage() {
   const [stats, setStats] = useState({
     total_villages: 0,
@@ -25,8 +27,14 @@ export default function DashboardPage() {
     average_risk_score: 0,
   });
 
-  useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/v1/dashboard/stats")
+  const getBaseURL = () => {
+    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:8000/api/v1"
+      : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
+  };
+
+  const loadStats = () => {
+    fetch(`${getBaseURL()}/dashboard/stats`)
       .then((res) => res.json())
       .then((data) => {
         setStats(data);
@@ -34,7 +42,18 @@ export default function DashboardPage() {
       .catch((err) => {
         console.error("Error fetching dashboard stats:", err);
       });
+  };
+
+  useEffect(() => {
+    loadStats();
   }, []);
+
+  useWebSocket((event) => {
+    if (event === "sync_complete") {
+      console.log("Telemetry sync complete. Reloading dashboard stats.");
+      loadStats();
+    }
+  });
 
   const cards = [
     {

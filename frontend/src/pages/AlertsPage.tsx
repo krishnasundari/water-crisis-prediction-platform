@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import { alertAPI } from "../services/api";
 
+import useWebSocket from "../hooks/useWebSocket";
+
 export default function AlertsPage() {
   const [alerts,setAlerts]=useState<any[]>([]);
   const [form,setForm]=useState({
@@ -12,6 +14,12 @@ export default function AlertsPage() {
     message:""
   });
 
+  const getBaseURL = () => {
+    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:8000/api/v1"
+      : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
+  };
+
   async function load(){
     try{
       const data=await alertAPI.getAll();
@@ -21,8 +29,15 @@ export default function AlertsPage() {
 
   useEffect(()=>{load();},[]);
 
+  useWebSocket((event) => {
+    if (event === "sync_complete") {
+      console.log("Telemetry sync complete. Reloading alerts list.");
+      load();
+    }
+  });
+
   async function createAlert(){
-    await fetch("http://127.0.0.1:8000/api/v1/alerts/",{
+    await fetch(`${getBaseURL()}/alerts/`,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
@@ -38,7 +53,7 @@ export default function AlertsPage() {
   }
 
   async function deleteAlert(id:number){
-    await fetch(`http://127.0.0.1:8000/api/v1/alerts/${id}`,{method:"DELETE"});
+    await fetch(`${getBaseURL()}/alerts/${id}`,{method:"DELETE"});
     load();
   }
 
