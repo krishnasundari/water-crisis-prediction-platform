@@ -37,6 +37,13 @@ const reservoirIcon = new L.Icon({
   iconAnchor: [12, 41],
 });
 
+const citizenIcon = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+
 const shelterIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
@@ -50,22 +57,27 @@ export default function SearchPage() {
   const [error, setError] = useState("");
   const [data, setData] = useState<any>(null);
 
-  // Countdown timer for simulated evacuations
-  const [secondsLeft, setSecondsLeft] = useState(7200); // 2 hours by default
+  // Government simulator states
+  const [projectionHours, setProjectionHours] = useState<number>(0);
+  const [allVillages, setAllVillages] = useState<any[]>([]);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 7200));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // Citizen search portal states
+  const [citizenQuery, setCitizenQuery] = useState("");
+  const [citizenVillage, setCitizenVillage] = useState<any>(null);
 
-  const formatCountdown = (sec: number) => {
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    const s = sec % 60;
-    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  const getBaseURL = () => {
+    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:8000/api/v1"
+      : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
   };
+
+  // Fetch all villages on mount for quick citizen search lookup
+  useEffect(() => {
+    fetch(`${getBaseURL()}/villages/`)
+      .then((res) => res.json())
+      .then((data) => setAllVillages(data))
+      .catch((err) => console.error("Error fetching villages:", err));
+  }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,12 +86,12 @@ export default function SearchPage() {
     setLoading(true);
     setError("");
     setData(null);
+    setCitizenVillage(null); // Reset citizen search
+    setProjectionHours(0); // Reset projection
 
     try {
       const res = await weatherAPI.search(query.trim());
       setData(res);
-      // Reset countdown to a random time between 1 and 3 hours for realism
-      setSecondsLeft(Math.floor(Math.random() * 7200) + 3600);
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to fetch weather. Verify city name and try again.");
@@ -88,139 +100,224 @@ export default function SearchPage() {
     }
   };
 
-  // Determine if there are critical reservoirs nearby (e.g. level > 80%)
-  const criticalReservoir = data?.nearby_reservoirs?.find(
-    (res: any) => res.current_level > 80 && res.distance_km < 150
-  );
+  // Citizen village lookup submission
+  const handleCitizenSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!citizenQuery.trim()) return;
 
-  // Compute map center (fallback to India center [20.5937, 78.9629])
-  const mapCenter: [number, number] = data?.location
+    const found = allVillages.find((v) =>
+      v.name.toLowerCase().includes(citizenQuery.toLowerCase().trim())
+    );
+
+    if (found) {
+      setCitizenVillage(found);
+      // Center weather query on this village's state or district
+      setQuery(found.district || found.state);
+      // Automatically pull coordinates and forecast in background
+      weatherAPI.search(found.district || found.state).then((res) => {
+        setData(res);
+      }).catch((err) => console.error(err));
+    } else {
+      alert(`Village "${citizenQuery}" not found in database registry. Try Gaya Village or Pongodu.`);
+    }
+  };
+
+  // Mathematical Simulator: calculate water levels over time if raining
+  const getProjectedLevel = (baseLevel: number) => {
+    const rainRate = data?.current_weather?.rain || 0;
+    if (rainRate === 0) return baseLevel; // No rain, level stays baseline
+    
+    const inflowCoeff = 0.35; // Runoff coefficient into dam reservoir
+    const addedInflow = rainRate * projectionHours * inflowCoeff;
+    return Math.min(115.0, Math.round((baseLevel + addedInflow) * 100) / 100);
+  };
+
+  // Submerge calculator for nearby villages
+  const getVillageFloodStatus = (distanceKm: number, projectedLevel: number) => {
+    if (projectedLevel >= 100) {
+      return {
+        status: "🔴 Submerged / Breached",
+        action: "Urgent Boat Rescue Dispatch Required",
+        color: "text-red-400 font-extrabold uppercase animate-pulse",
+      };
+    }
+    if (projectedLevel >= 90) {
+      const timeToFlood = Math.max(0.5, Math.round((100 - projectedLevel) * 0.5 * 10) / 10);
+      return {
+        status: "🔴 Evacuating Now",
+        action: `Water hits boundary in ~${timeToFlood} hours`,
+        color: "text-red-300 font-bold",
+      };
+    }
+    if (projectedLevel >= 75) {
+      return {
+        status: "🟡 High Watch Level",
+        action: "Evacuate senior citizens to shelter",
+        color: "text-yellow-400 font-medium",
+      };
+    }
+    return {
+      status: "🟢 Safe Area",
+      action: "Standby monitoring",
+      color: "text-green-400",
+    };
+  };
+
+  // Find nearest reservoir to the target searched location or citizen village
+  const activeCoordinates = citizenVillage
+    ? [citizenVillage.latitude, citizenVillage.longitude]
+    : data?.location
     ? [data.location.latitude, data.location.longitude]
-    : [20.5937, 78.9629];
+    : [20.5937, 78.9629]; // fallback
 
-  // Mock safe assembly shelter coordinates based on offset
-  const shelterCoords: [number, number] = data?.location
-    ? [data.location.latitude + 0.04, data.location.longitude + 0.05]
-    : [20.6337, 79.0129];
+  const nearestReservoir = data?.nearby_reservoirs?.[0];
+  const projectedDamLevel = nearestReservoir ? getProjectedLevel(nearestReservoir.current_level) : 50;
 
-  // Route path avoiding the critical dam center
-  const escapeRoute: [number, number][] = data?.location
-    ? [
-        [data.location.latitude, data.location.longitude],
-        [data.location.latitude + 0.015, data.location.longitude - 0.01],
-        [data.location.latitude + 0.03, data.location.longitude + 0.02],
-        shelterCoords,
-      ]
-    : [];
+  // Evacuation coordinates
+  const targetLatitude = activeCoordinates[0];
+  const targetLongitude = activeCoordinates[1];
+
+  const shelterCoords: [number, number] = [targetLatitude + 0.03, targetLongitude + 0.03];
+  
+  const escapeRoute: [number, number][] = [
+    [targetLatitude, targetLongitude],
+    [targetLatitude + 0.01, targetLongitude - 0.005],
+    [targetLatitude + 0.02, targetLongitude + 0.015],
+    shelterCoords,
+  ];
 
   return (
     <div className="flex h-screen bg-slate-900 text-slate-100 overflow-hidden">
       <Sidebar />
 
       <div className="flex-1 flex flex-col overflow-y-auto">
-        {/* TOP NAVBAR */}
+        {/* DISASTER COMMAND HEADER */}
         <header className="bg-slate-800/80 border-b border-slate-700/60 p-6 sticky top-0 z-40 backdrop-blur-md">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="max-w-7xl mx-auto flex flex-col xl:flex-row justify-between items-center gap-6">
             <div>
-              <h2 className="text-2xl font-bold bg-gradient-to-r from-sky-400 to-cyan-300 bg-clip-text text-transparent">
-                💧 Live Water & Dam Analysis
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-red-400 via-sky-400 to-cyan-300 bg-clip-text text-transparent">
+                🛡️ Disaster Management Command Center
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Real-Time Geocoding, Dynamic Weather Forecasts, and Evacuation Routing
+                Government Time-Projections (1hr - 8hrs) & Live Citizen Evacuation Routing
               </p>
             </div>
 
-            {/* Search Input Box */}
-            <form onSubmit={handleSearch} className="flex w-full md:w-96 items-center gap-2">
-              <input
-                type="text"
-                placeholder="Search city e.g. Patna, Hyderabad..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200"
-              >
-                {loading ? "Searching..." : "Search"}
-              </button>
-            </form>
+            {/* Two Search Inputs */}
+            <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
+              {/* Government Location Search */}
+              <form onSubmit={handleSearch} className="flex flex-1 items-center gap-2">
+                <div className="relative w-full">
+                  <span className="absolute left-3 top-2.5 text-xs text-sky-400 font-bold uppercase">Govt</span>
+                  <input
+                    type="text"
+                    placeholder="Search State/City (e.g. Kerala, Patna)"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-14 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-xl px-4 py-2 text-sm font-semibold transition"
+                >
+                  Query
+                </button>
+              </form>
+
+              {/* Citizen Village Search */}
+              <form onSubmit={handleCitizenSearch} className="flex flex-1 items-center gap-2">
+                <div className="relative w-full">
+                  <span className="absolute left-3 top-2.5 text-xs text-orange-400 font-bold uppercase">Citizen</span>
+                  <input
+                    type="text"
+                    placeholder="Search Your Village (e.g. Pongodu)"
+                    value={citizenQuery}
+                    onChange={(e) => setCitizenQuery(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-18 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="bg-orange-600 hover:bg-orange-500 text-white rounded-xl px-4 py-2 text-sm font-semibold transition"
+                >
+                  Locate
+                </button>
+              </form>
+            </div>
           </div>
         </header>
 
         {/* CONTAINER VIEW */}
         <main className="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
-          {/* Default view when no city searched */}
+          
+          {/* Default Welcome View */}
           {!data && !error && !loading && (
             <div className="text-center py-20 bg-slate-800/40 rounded-3xl border border-slate-700/50 p-8">
-              <span className="text-6xl">🔍</span>
-              <h3 className="text-xl font-bold text-slate-300 mt-4">Begin Your Real-Time Search</h3>
-              <p className="text-slate-400 max-w-md mx-auto mt-2 text-sm">
-                Enter any city name in the search bar above to pull live weather records, 15-day rainfall predictions, and nearest reservoir capacities instantly.
+              <span className="text-6xl">📡</span>
+              <h3 className="text-xl font-bold text-slate-300 mt-4">Command Center Inactive</h3>
+              <p className="text-slate-400 max-w-lg mx-auto mt-2 text-sm">
+                Enter a city or state name in the **Govt Portal** to project dam inflows, or search for your village name in the **Citizen Portal** to generate live evacuation routes.
               </p>
               <div className="flex justify-center gap-3 mt-6">
-                {["Hyderabad", "Patna", "Kochi", "Chennai"].map((city) => (
-                  <button
-                    key={city}
-                    onClick={() => {
-                      setQuery(city);
-                      // Trigger search programmatically
-                      const fakeEvent = { preventDefault: () => {} } as any;
-                      setTimeout(() => handleSearch(fakeEvent), 100);
-                    }}
-                    className="bg-slate-700/50 hover:bg-slate-700 border border-slate-600/40 px-4 py-1.5 rounded-full text-xs font-medium text-slate-300 transition"
-                  >
-                    🚀 {city}
-                  </button>
-                ))}
+                <button
+                  onClick={() => {
+                    setQuery("Kerala");
+                    const fakeEvent = { preventDefault: () => {} } as any;
+                    setTimeout(() => handleSearch(fakeEvent), 100);
+                  }}
+                  className="bg-slate-700/50 hover:bg-slate-700 border border-slate-600/40 px-4 py-1.5 rounded-full text-xs font-medium text-slate-300 transition"
+                >
+                  🚨 Quick Test: Kerala
+                </button>
               </div>
             </div>
           )}
 
-          {/* Loading Indicator */}
+          {/* Loading state */}
           {loading && (
             <div className="flex flex-col items-center justify-center py-24 space-y-4">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-sky-400"></div>
-              <p className="text-slate-400 text-sm">Querying satellite databases...</p>
+              <p className="text-slate-400 text-sm">Synchronizing satellite datasets...</p>
             </div>
           )}
 
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-300 p-6 rounded-2xl">
-              <h4 className="font-bold flex items-center gap-2">⚠️ Search Error</h4>
-              <p className="text-sm mt-1">{error}</p>
-            </div>
-          )}
-
-          {/* CRITICAL FLOOD & DAM GATES ALERT (Active if level > 80%) */}
-          {data && criticalReservoir && (
-            <div className="bg-red-950/40 border border-red-500/40 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 animate-pulse">
+          {/* CITIZEN EMERGENCY ALERT POPUP CARD */}
+          {data && citizenVillage && nearestReservoir && (
+            <div className="bg-red-950/40 border border-red-500/50 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 animate-pulse">
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-red-400 font-extrabold uppercase tracking-widest text-sm">
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
-                  Critical Flood Alert
+                  Citizen Warning: Evacuation Active
                 </div>
-                <h3 className="text-xl font-bold text-slate-100">
-                  Heavy Rain Impact: {criticalReservoir.name} is at {criticalReservoir.current_level}% capacity!
+                <h3 className="text-2xl font-black text-slate-100">
+                  📍 Village {citizenVillage.name} Inundation Threat!
                 </h3>
-                <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-                  Due to the current rainfall of **{data.current_weather.rain} mm**, the dam is approaching full capacity limits. Downstream flooding is projected. Residents must evacuate to safe high ground immediately.
+                <p className="text-sm text-slate-300 leading-relaxed max-w-3xl">
+                  Your village is located **{nearestReservoir.distance_km} km** away from **{nearestReservoir.name}**, which is currently rises to **{projectedDamLevel}%** capacity under the rain sum of **{data.current_weather.rain} mm**.
                 </p>
+                <div className="bg-slate-900/60 p-3 rounded-xl inline-block border border-red-500/20">
+                  <span className="text-green-400 font-bold text-sm">
+                    ⛺ Safe Assembly Shelter: Government Relief Camp (District Center)
+                  </span>
+                </div>
               </div>
 
-              {/* Countdown Evacuation Widget */}
-              <div className="bg-red-900/50 border border-red-500/30 p-4 rounded-2xl text-center min-w-[200px]">
-                <span className="block text-xs uppercase tracking-wider text-red-300 font-bold">
-                  Dam Gates Release In:
+              {/* Citizen Countdown Widget */}
+              <div className="bg-red-900/50 border border-red-500/40 p-5 rounded-2xl text-center min-w-[220px]">
+                <span className="block text-xs uppercase tracking-wider text-red-300 font-extrabold">
+                  Time to Submerge:
                 </span>
-                <span className="block text-3xl font-mono font-extrabold text-white mt-1">
-                  {formatCountdown(secondsLeft)}
+                <span className="block text-3xl font-mono font-black text-white mt-1">
+                  {projectedDamLevel >= 100
+                    ? "00:00:00"
+                    : projectedDamLevel >= 90
+                    ? "01:34:12"
+                    : "03:45:00"}
                 </span>
-                <span className="block text-[10px] text-red-300 mt-1 uppercase">
-                  Follow Green Route on Map
+                <span className="block text-[10px] text-red-300 mt-2 uppercase font-bold tracking-wider">
+                  ⚠️ Evacuate via Green Line
                 </span>
               </div>
             </div>
@@ -228,167 +325,165 @@ export default function SearchPage() {
 
           {data && (
             <div className="grid lg:grid-cols-3 gap-6">
-              {/* CURRENT WEATHER CARD */}
-              <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-6 space-y-6">
+              
+              {/* PANEL 1: GOVERNMENT CONTROL BOARD */}
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-6 space-y-6 flex flex-col justify-between">
                 <div>
-                  <span className="text-xs uppercase tracking-widest text-sky-400 font-bold">
-                    Current Conditions
+                  <span className="text-xs uppercase tracking-widest text-red-400 font-bold">
+                    Disaster Simulator
                   </span>
-                  <h3 className="text-2xl font-bold text-slate-100 mt-1">
-                    {data.location.name}, {data.location.state}
-                  </h3>
-                  <p className="text-xs text-slate-400">{data.location.country}</p>
+                  <h3 className="text-xl font-bold text-slate-100 mt-1">Government Projection</h3>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <span className="text-5xl font-extrabold text-white">
-                      {data.current_weather.temperature}°C
-                    </span>
-                    <span className="block text-xs text-slate-400">
-                      Feels like {data.current_weather.feels_like}°C
-                    </span>
+                {/* Projection Slider Control */}
+                <div className="space-y-4 bg-slate-900/50 p-5 rounded-2xl border border-slate-700/40">
+                  <div className="flex justify-between items-center text-sm font-semibold">
+                    <span className="text-slate-400">Simulation Hours Later:</span>
+                    <span className="text-sky-400 font-mono text-lg">{projectionHours} Hours</span>
                   </div>
-                  <div className="text-right">
-                    <span className="block text-3xl">
-                      {data.current_weather.weather_code === 0 ? "☀️" : "🌧️"}
-                    </span>
-                    <span className="text-sm font-semibold text-sky-300">
-                      {data.current_weather.condition}
-                    </span>
-                  </div>
-                </div>
 
-                {/* Grid stats */}
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-700/40 text-sm">
-                  <div>
-                    <span className="text-slate-400 block text-xs">Humidity</span>
-                    <span className="font-bold text-slate-200">{data.current_weather.humidity}%</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-xs">Rain Rate</span>
-                    <span className="font-bold text-slate-200">{data.current_weather.rain} mm</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-xs">Wind Speed</span>
-                    <span className="font-bold text-slate-200">{data.current_weather.wind_speed} km/h</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-xs">Precipitation</span>
-                    <span className="font-bold text-slate-200">{data.current_weather.precipitation} mm</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* NEAREST RESERVOIRS TABLE */}
-              <div className="lg:col-span-2 bg-slate-800/40 border border-slate-700/50 rounded-3xl p-6 space-y-4 flex flex-col justify-between">
-                <div>
-                  <span className="text-xs uppercase tracking-widest text-sky-400 font-bold">
-                    Nearby Reservoirs & Dams
-                  </span>
-                  <h3 className="text-xl font-bold text-slate-100 mt-1">
-                    Local Watershed Telemetry
-                  </h3>
-                </div>
-
-                <div className="overflow-x-auto flex-1">
-                  <table className="w-full text-left border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-700/60 text-slate-400 text-xs uppercase">
-                        <th className="pb-3">Dam Name</th>
-                        <th className="pb-3">Capacity (MCM)</th>
-                        <th className="pb-3">Base Level</th>
-                        <th className="pb-3 text-center">Live Water Level</th>
-                        <th className="pb-3 text-right">Distance</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700/30">
-                      {data.nearby_reservoirs.map((res: any) => (
-                        <tr key={res.id} className="hover:bg-slate-700/20">
-                          <td className="py-3 font-semibold text-slate-200">{res.name}</td>
-                          <td className="py-3 text-slate-300">{res.capacity} MCM</td>
-                          <td className="py-3 text-slate-400">{res.original_level}%</td>
-                          <td className="py-3 text-center">
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                res.current_level > 80
-                                  ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                                  : res.current_level > 65
-                                  ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
-                                  : "bg-green-500/10 text-green-400 border border-green-500/20"
-                              }`}
-                            >
-                              {res.current_level}%
-                              {res.inflow_added_pct > 0 && (
-                                <span className="text-[10px] ml-1">
-                                  (+{res.inflow_added_pct}% rain inflow)
-                                </span>
-                              )}
-                            </span>
-                          </td>
-                          <td className="py-3 text-right text-sky-300 font-mono font-bold">
-                            {res.distance_km} km
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* GIS NAVIGATION MAP (Shows Escape Route if Dam is Critical) */}
-          {data && (
-            <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-6 space-y-4">
-              <div>
-                <span className="text-xs uppercase tracking-widest text-sky-400 font-bold">
-                  GIS Flood Routing Map
-                </span>
-                <h3 className="text-xl font-bold text-slate-100 mt-1">
-                  Active Evacuation Escapes & Restricted Hazards
-                </h3>
-              </div>
-
-              {/* Map Container */}
-              <div className="h-[400px] w-full rounded-2xl overflow-hidden border border-slate-700">
-                <MapContainer center={mapCenter} zoom={12} style={{ height: "100%", width: "100%" }}>
-                  <ChangeView center={mapCenter} zoom={criticalReservoir ? 11 : 12} />
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  <input
+                    type="range"
+                    min="0"
+                    max="8"
+                    step="1"
+                    value={projectionHours}
+                    onChange={(e) => setProjectionHours(Number(e.target.value))}
+                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500 focus:outline-none"
                   />
 
-                  {/* Targeted City Location Marker */}
-                  <Marker position={mapCenter} icon={targetLocationIcon}>
-                    <Popup>
-                      <div className="text-slate-800 font-bold">
-                        <h4>📍 {data.location.name}</h4>
-                        <p className="text-xs font-normal">Searched position coordinates.</p>
-                      </div>
-                    </Popup>
-                  </Marker>
+                  <div className="flex justify-between text-[10px] text-slate-500 font-bold">
+                    <span>CURRENT</span>
+                    <span>1 HR</span>
+                    <span>2 HR</span>
+                    <span>4 HR</span>
+                    <span>8 HR</span>
+                  </div>
+                </div>
 
-                  {/* Nearby Reservoirs & Dams Markers */}
-                  {data.nearby_reservoirs.map((res: any) => {
-                    const resPos: [number, number] = [res.latitude, res.longitude];
-                    return (
-                      <div key={res.id}>
-                        <Marker position={resPos} icon={reservoirIcon}>
+                {/* Simulated Weather Status */}
+                <div className="space-y-3 pt-4 border-t border-slate-700/40 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Live Weather:</span>
+                    <span className="font-semibold text-slate-200">{data.current_weather.condition}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Satellite Rain Rate:</span>
+                    <span className="font-semibold text-sky-400 font-mono">{data.current_weather.rain} mm/h</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Accumulated Rain:</span>
+                    <span className="font-semibold text-sky-300 font-mono">
+                      {(data.current_weather.rain * projectionHours).toFixed(1)} mm
+                    </span>
+                  </div>
+                </div>
+
+                {/* Simulated Dam Breaches */}
+                {nearestReservoir && (
+                  <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-700/30 text-center">
+                    <span className="text-xs uppercase text-slate-400 block font-bold">Projected Dam Level</span>
+                    <span className="text-4xl font-extrabold text-white block mt-1 font-mono">
+                      {projectedDamLevel}%
+                    </span>
+                    {projectedDamLevel >= 100 ? (
+                      <span className="text-[10px] bg-red-500/25 border border-red-500/35 px-3 py-1 rounded-full text-red-400 font-bold block mt-2 animate-bounce">
+                        🚨 CRITICAL OVERFLOW BREACH!
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-500 block mt-1">
+                        Capacity Limit: {nearestReservoir.capacity} MCM
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* PANEL 2: GIS MAP */}
+              <div className="lg:col-span-2 bg-slate-800/40 border border-slate-700/50 rounded-3xl p-6 space-y-4">
+                <div>
+                  <span className="text-xs uppercase tracking-widest text-sky-400 font-bold">
+                    GIS Incident Command Map
+                  </span>
+                  <h3 className="text-xl font-bold text-slate-100 mt-1">
+                    Live Warning Boundaries & Evacuation Paths
+                  </h3>
+                </div>
+
+                <div className="h-[380px] w-full rounded-2xl overflow-hidden border border-slate-700">
+                  <MapContainer center={[targetLatitude, targetLongitude]} zoom={12} style={{ height: "100%", width: "100%" }}>
+                    <ChangeView center={[targetLatitude, targetLongitude]} zoom={projectedDamLevel >= 90 ? 11 : 12} />
+                    <TileLayer
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    />
+
+                    {/* Searched Location Marker */}
+                    {!citizenVillage && (
+                      <Marker position={[targetLatitude, targetLongitude]} icon={targetLocationIcon}>
+                        <Popup>
+                          <div className="text-slate-800 font-bold">
+                            <h4>📍 Searched City center</h4>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    )}
+
+                    {/* Citizen Village Marker */}
+                    {citizenVillage && (
+                      <Marker position={[targetLatitude, targetLongitude]} icon={citizenIcon}>
+                        <Popup>
+                          <div className="text-slate-800 font-bold">
+                            <h4>📍 {citizenVillage.name}</h4>
+                            <p className="text-xs font-normal">Your searched village location.</p>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    )}
+
+                    {/* Safe Relief Shelter Marker */}
+                    {(projectedDamLevel >= 90 || citizenVillage) && (
+                      <>
+                        <Marker position={shelterCoords} icon={shelterIcon}>
                           <Popup>
-                            <div className="text-slate-800 font-semibold">
-                              <h4 className="font-bold">💧 {res.name}</h4>
-                              <p className="text-xs">Capacity: {res.capacity} MCM</p>
-                              <p className="text-xs">Live Water Level: {res.current_level}%</p>
+                            <div className="text-slate-800">
+                              <h4 className="font-bold text-green-600">⛺ Safe Relief Shelter</h4>
+                              <p className="text-xs">Medical supplies, water, and food rations.</p>
                             </div>
                           </Popup>
                         </Marker>
 
-                        {/* Draw Red Warning Inundation Boundary circle if capacity > 80% */}
-                        {res.current_level > 80 && (
+                        {/* Evacuation green polyline */}
+                        <Polyline
+                          positions={escapeRoute}
+                          pathOptions={{
+                            color: "#10B981",
+                            weight: 6,
+                            opacity: 0.8,
+                            dashArray: "10, 10",
+                          }}
+                        />
+                      </>
+                    )}
+
+                    {/* Nearest Reservoir Marker */}
+                    {nearestReservoir && (
+                      <>
+                        <Marker position={[nearestReservoir.latitude, nearestReservoir.longitude]} icon={reservoirIcon}>
+                          <Popup>
+                            <div className="text-slate-800 font-bold">
+                              <h4>🌊 {nearestReservoir.name}</h4>
+                              <p className="text-xs">Capacity: {nearestReservoir.capacity} MCM</p>
+                              <p className="text-xs">Simulated Level: {projectedDamLevel}%</p>
+                            </div>
+                          </Popup>
+                        </Marker>
+
+                        {/* Red danger circle based on projection */}
+                        {projectedDamLevel >= 90 && (
                           <Circle
-                            center={resPos}
-                            radius={8000} // 8km radius flood boundary
+                            center={[nearestReservoir.latitude, nearestReservoir.longitude]}
+                            radius={8000} // 8km danger zone
                             pathOptions={{
                               fillColor: "red",
                               color: "red",
@@ -397,81 +492,70 @@ export default function SearchPage() {
                             }}
                           />
                         )}
-                      </div>
-                    );
-                  })}
-
-                  {/* Draw Safe Evacuation Path & Shelter Marker if Critical Alert is active */}
-                  {criticalReservoir && (
-                    <>
-                      <Marker position={shelterCoords} icon={shelterIcon}>
-                        <Popup>
-                          <div className="text-slate-800">
-                            <h4 className="font-bold text-green-600">⛺ Govt Evacuation Shelter</h4>
-                            <p className="text-xs">Safe assembly area with medical aid & supplies.</p>
-                          </div>
-                        </Popup>
-                      </Marker>
-
-                      {/* Safe Escape Route */}
-                      <Polyline
-                        positions={escapeRoute}
-                        pathOptions={{
-                          color: "#10B981", // Emerald green
-                          weight: 6,
-                          opacity: 0.8,
-                          dashArray: "1, 10",
-                        }}
-                      />
-                    </>
-                  )}
-                </MapContainer>
+                      </>
+                    )}
+                  </MapContainer>
+                </div>
               </div>
             </div>
           )}
 
-          {/* 15-DAY FORECAST GRID */}
-          {data && (
+          {/* PANEL 3: IMPACTED VILLAGES DOWNSTREAM */}
+          {data && nearestReservoir && (
             <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-6 space-y-4">
               <div>
-                <span className="text-xs uppercase tracking-widest text-sky-400 font-bold">
-                  15-Day Weather Forecast
+                <span className="text-xs uppercase tracking-widest text-red-400 font-bold">
+                  Government Action Table
                 </span>
                 <h3 className="text-xl font-bold text-slate-100 mt-1">
-                  Projected Daily Rainfall Sums
+                  Downstream Submerge & Evacuation Status at Hour {projectionHours}
                 </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Villages located within the downstream path of {nearestReservoir.name}.
+                </p>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-3">
-                {data.forecast_15_days.map((day: any) => (
-                  <div
-                    key={day.date}
-                    className={`p-3 rounded-2xl border text-center space-y-2 ${
-                      day.precipitation > 20
-                        ? "bg-red-500/10 border-red-500/30 text-red-200"
-                        : day.precipitation > 5
-                        ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-200"
-                        : "bg-slate-800 border-slate-700/60 text-slate-200"
-                    }`}
-                  >
-                    <span className="block text-xs text-slate-400 font-mono">
-                      {new Date(day.date).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        weekday: "short",
-                      })}
-                    </span>
-                    <span className="block text-xl">
-                      {day.precipitation > 20 ? "⛈️" : day.precipitation > 5 ? "🌧️" : "🌤️"}
-                    </span>
-                    <span className="block text-sm font-bold">
-                      {day.temp_max}° / {day.temp_min}°
-                    </span>
-                    <span className="block text-[10px] text-sky-300 font-semibold font-mono">
-                      🌧️ {day.precipitation} mm
-                    </span>
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-700/60 text-slate-400 text-xs uppercase">
+                      <th className="pb-3">Village Name</th>
+                      <th className="pb-3">Distance to Dam</th>
+                      <th className="pb-3">Population</th>
+                      <th className="pb-3">Simulated Safety Status</th>
+                      <th className="pb-3 text-right">Emergency Action Required</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700/30">
+                    {/* Display mock impacted villages nearby */}
+                    {[
+                      { name: "Kuttanad Lowlands", dist: 3.2, pop: 4500 },
+                      { name: "Edappally Settlement", dist: 7.8, pop: 12000 },
+                      { name: "Vyttila Ward", dist: 12.4, pop: 6800 },
+                    ].map((village) => {
+                      const statusInfo = getVillageFloodStatus(village.dist, projectedDamLevel);
+                      return (
+                        <tr key={village.name} className="hover:bg-slate-700/10">
+                          <td className="py-4 font-bold text-slate-200">{village.name}</td>
+                          <td className="py-4 font-mono font-semibold text-sky-400">{village.dist} km</td>
+                          <td className="py-4 text-slate-300">{village.pop.toLocaleString()}</td>
+                          <td className="py-4">
+                            <span className={statusInfo.color}>{statusInfo.status}</span>
+                          </td>
+                          <td className="py-4 text-right">
+                            {projectedDamLevel >= 90 ? (
+                              <span className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs px-3 py-1.5 rounded-full font-bold">
+                                🚨 {statusInfo.action}
+                              </span>
+                            ) : (
+                              <span className="text-slate-500 text-xs italic">Standby Mode</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
