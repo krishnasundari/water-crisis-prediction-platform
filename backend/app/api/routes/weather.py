@@ -29,7 +29,7 @@ def search_weather(query: str, db: Session = Depends(get_db)):
     return result
 
 import requests
-from app.models.models import WeatherHistory
+from app.models.models import WeatherHistory, Reservoir
 
 def get_weather_code_text(code: int) -> str:
     mapping = {
@@ -206,6 +206,66 @@ def get_weather_history(query: str, db: Session = Depends(get_db)):
             "visibility": r.visibility,
             "condition": r.condition,
             "recorded_at": r.recorded_at
+        }
+        for r in records
+    ]
+
+from app.models.models import RainfallRecord
+from app.services.weather_service import calculate_distance
+
+@router.get("/rainfall/history")
+def get_rainfall_history(query: str, db: Session = Depends(get_db)):
+    """
+    Find nearest reservoir and get the last 15 logged rainfall records.
+    """
+    if not query or not query.strip():
+        raise HTTPException(status_code=400, detail="Location query cannot be empty")
+        
+    # 1. Geocode Location
+    GEO_URL = "https://geocoding-api.open-meteo.com/v1/search"
+    geo_params = {"name": query.strip(), "count": 1, "language": "en", "format": "json"}
+    
+    try:
+        geo_resp = requests.get(GEO_URL, params=geo_params, timeout=5)
+        geo_resp.raise_for_status()
+        geo_data = geo_resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Geocoding failure: {str(e)}")
+        
+    if not geo_data.get("results"):
+        raise HTTPException(status_code=404, detail="Location not found in weather index")
+        
+    loc = geo_data["results"][0]
+    lat = loc["latitude"]
+    lon = loc["longitude"]
+    
+    # 2. Find nearest reservoir
+    reservoirs = db.query(Reservoir).all()
+    nearest_res = None
+    min_dist = float("inf")
+    for res in reservoirs:
+        dist = calculate_distance(lat, lon, res.latitude, res.longitude)
+        if dist < min_dist:
+            min_dist = dist
+            nearest_res = res
+            
+    if not nearest_res:
+        return []
+        
+    # 3. Fetch last 15 rainfall records for this dam
+    records = db.query(RainfallRecord).filter(
+        RainfallRecord.reservoir_id == nearest_res.id
+    ).order_by(RainfallRecord.measurement_date.desc()).limit(15).all()
+    
+    records.reverse()
+    
+    return [
+        {
+            "id": r.id,
+            "reservoir_name": nearest_res.name,
+            "district": r.district,
+            "measurement_date": r.measurement_date,
+            "rainfall_amount": r.rainfall_amount
         }
         for r in records
     ]

@@ -17,6 +17,7 @@ import AIAssistantPage from './pages/AIAssistantPage'
 import SearchPage from './pages/SearchPage'
 import DisasterPage from "./pages/DisasterPage";
 import WeatherPage from "./pages/WeatherPage";
+import RainfallPage from "./pages/RainfallPage";
 
 function App() {
   return (
@@ -128,6 +129,14 @@ function App() {
   element={
     <ProtectedRoute>
       <WeatherPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path="/rainfall-monitoring"
+  element={
+    <ProtectedRoute>
+      <RainfallPage />
     </ProtectedRoute>
   }
 />
