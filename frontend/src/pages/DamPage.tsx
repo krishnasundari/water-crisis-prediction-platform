@@ -22,6 +22,7 @@ import {
   Legend,
 } from "recharts";
 import useWebSocket from "../hooks/useWebSocket";
+import { getBaseURL } from "../utils/api";
 
 // Map center adjustment component
 function ChangeView({ center, zoom }: { center: [number, number]; zoom: number }) {
@@ -32,7 +33,19 @@ function ChangeView({ center, zoom }: { center: [number, number]; zoom: number }
   return null;
 }
 
-// Leaflet markers color generator
+// Fix Leaflet marker icons
+const fixLeafletIcon = (color: string) => {
+  return new L.Icon({
+    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+    shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41],
+    shadowAnchor: [12, 41],
+  });
+};
+
 const getMarkerIcon = (status: string) => {
   let color = "blue";
   if (status === "Breached" || status === "Critical") {
@@ -42,25 +55,13 @@ const getMarkerIcon = (status: string) => {
   } else {
     color = "green";
   }
-  
-  return new L.Icon({
-    iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${color}.png`,
-    shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-  });
+  return fixLeafletIcon(color);
 };
 
 export default function DamPage() {
   const [dams, setDams] = useState<any[]>([]);
   const [selectedDam, setSelectedDam] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
-
-  const getBaseURL = () => {
-    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-      ? "http://localhost:8000/api/v1"
-      : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
-  };
 
   const loadDams = async () => {
     try {

@@ -1,20 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import { getWebSocketURL } from "../utils/api";
 
 export default function useWebSocket(onMessageReceived?: (event: string, data: any) => void) {
   const [connected, setConnected] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
-  const getWSURL = () => {
-    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-    return isLocal
-      ? "ws://localhost:8000/api/v1/ws"
-      : "wss://water-crisis-prediction-platform-1.onrender.com/api/v1/ws";
-  };
-
   const connect = () => {
     try {
-      const url = getWSURL();
+      const url = getWebSocketURL();
       console.log(`Connecting WebSocket to: ${url}`);
       const socket = new WebSocket(url);
       socketRef.current = socket;

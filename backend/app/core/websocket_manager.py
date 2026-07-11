@@ -21,10 +21,15 @@ class ConnectionManager:
     async def broadcast(self, message: dict):
         import json
         payload = json.dumps(message)
+        dead_connections = []
         for connection in self.active_connections:
             try:
                 await connection.send_text(payload)
             except Exception as e:
-                print(f"Error broadcasting to client, removing connection: {str(e)}")
+                print(f"Error broadcasting to client, marking for cleanup: {str(e)}")
+                dead_connections.append(connection)
+        
+        for dead in dead_connections:
+            self.disconnect(dead)
 
 manager = ConnectionManager()

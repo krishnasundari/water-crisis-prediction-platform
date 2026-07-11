@@ -17,6 +17,7 @@ import {
   AreaChart,
   Area,
 } from "recharts";
+import { getBaseURL } from "../utils/api";
 
 export default function AnalyticsPage() {
   const [riskData, setRiskData] = useState({ safe: 0, moderate: 0, high: 0 });
@@ -29,12 +30,6 @@ export default function AnalyticsPage() {
   const [activeTimeframe, setActiveTimeframe] = useState("daily"); // daily, weekly, monthly, yearly
   const [historySeries, setHistorySeries] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-
-  const getBaseURL = () => {
-    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-      ? "http://localhost:8000/api/v1"
-      : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
-  };
 
   const loadSummaryStats = () => {
     fetch(`${getBaseURL()}/analytics/risk-distribution`)

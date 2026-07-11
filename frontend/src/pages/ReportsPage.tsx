@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
+import { getBaseURL } from "../utils/api";
 
 export default function ReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
@@ -12,12 +13,6 @@ export default function ReportsPage() {
     include_forecasts: true,
     filters: "",
   });
-
-  const getBaseURL = () => {
-    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-      ? "http://localhost:8000/api/v1"
-      : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
-  };
 
   const loadReports = () => {
     fetch(`${getBaseURL()}/reports`)

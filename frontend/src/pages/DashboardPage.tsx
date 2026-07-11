@@ -13,6 +13,7 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
+import { getBaseURL } from "../utils/api";
 
 import useWebSocket from "../hooks/useWebSocket";
 
@@ -27,12 +28,6 @@ export default function DashboardPage() {
     average_risk_score: 0,
   });
   const [alerts, setAlerts] = useState<any[]>([]);
-
-  const getBaseURL = () => {
-    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-      ? "http://localhost:8000/api/v1"
-      : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
-  };
 
   const loadData = () => {
     fetch(`${getBaseURL()}/dashboard/stats`)
