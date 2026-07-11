@@ -262,3 +262,16 @@ class RiverHistory(Base):
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())
     
     river = relationship("River")
+
+# Notification Logs Model
+class NotificationLog(Base):
+    __tablename__ = "notification_logs"
+    
+    id = Column(Integer, primary_key=True)
+    alert_id = Column(Integer, ForeignKey("alerts.id", ondelete="CASCADE"), nullable=False)
+    recipient_name = Column(String(100), nullable=False)
+    recipient_role = Column(String(100), nullable=False)
+    channel = Column(String(20), nullable=False)
+    destination = Column(String(100), nullable=False)
+    status = Column(String(20), default="delivered")
+    sent_at = Column(DateTime(timezone=True), server_default=func.now())

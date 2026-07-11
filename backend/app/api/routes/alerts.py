@@ -36,12 +36,37 @@ def create_alert(
     )
 
     db.add(new_alert)
+    db.flush() # flush to get auto-incremented alert id
+    
+    # Dispatch notifications immediately
+    from app.services.notification_service import dispatch_alert_notifications
+    dispatch_alert_notifications(
+        db,
+        new_alert.id,
+        village_id=alert.village_id,
+        reservoir_id=alert.reservoir_id
+    )
+    
     db.commit()
     db.refresh(new_alert)
 
     print("===== ALERT SAVED =====", new_alert.id)
 
     return new_alert
+
+@router.get("/{alert_id}/notifications")
+def get_alert_notifications(
+    alert_id: int,
+    db: Session = Depends(get_db)
+):
+    from app.models.models import NotificationLog
+    logs = (
+        db.query(NotificationLog)
+        .filter(NotificationLog.alert_id == alert_id)
+        .order_by(NotificationLog.sent_at.asc())
+        .all()
+    )
+    return logs
 @router.put("/{alert_id}/read")
 def mark_alert_read(
     alert_id: int,

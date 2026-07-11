@@ -9,6 +9,30 @@ export default function AlertsPage() {
   const [loading, setLoading] = useState(false);
   const [filterType, setFilterType] = useState("all");
   const [filterSeverity, setFilterSeverity] = useState("all");
+  const [expandedAlertId, setExpandedAlertId] = useState<number | null>(null);
+  const [dispatchLogs, setDispatchLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+
+  const toggleExpandAlert = async (id: number) => {
+    if (expandedAlertId === id) {
+      setExpandedAlertId(null);
+      setDispatchLogs([]);
+      return;
+    }
+    setExpandedAlertId(id);
+    setLogsLoading(true);
+    try {
+      const res = await fetch(`${getBaseURL()}/alerts/${id}/notifications`);
+      if (res.ok) {
+        const data = await res.json();
+        setDispatchLogs(data);
+      }
+    } catch (err) {
+      console.error("Error loading notification logs:", err);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
 
   const [form, setForm] = useState({
     village_id: "",
@@ -312,51 +336,85 @@ export default function AlertsPage() {
             ) : (
               <div className="space-y-3">
                 {filteredAlerts.map((a) => (
-                  <div
-                    key={a.id}
-                    className={`flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900/60 border rounded-2xl p-4 gap-4 text-xs transition-colors ${
-                      a.is_read ? "opacity-50 border-slate-800" : "border-slate-700/40 hover:border-slate-600"
-                    }`}
-                  >
-                    <div className="space-y-1.5 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black border ${getSeverityBadge(a.severity)}`}>
-                          {a.severity}
-                        </span>
-                        <span className="text-red-400 uppercase font-black tracking-wider text-[10px]">{a.alert_type}</span>
-                        {a.village_id && (
-                          <span className="bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded font-bold capitalize">
-                            🏘️ {getVillageName(a.village_id)}
+                  <div key={a.id} className="space-y-2">
+                    <div
+                      onClick={() => toggleExpandAlert(a.id)}
+                      className={`flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900/60 border rounded-2xl p-4 gap-4 text-xs transition-colors cursor-pointer ${
+                        a.is_read ? "opacity-50 border-slate-800" : "border-slate-700/40 hover:border-slate-600"
+                      }`}
+                    >
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black border ${getSeverityBadge(a.severity)}`}>
+                            {a.severity}
                           </span>
-                        )}
-                        {a.reservoir_id && (
-                          <span className="bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded font-bold capitalize">
-                            💧 {getReservoirName(a.reservoir_id)}
+                          <span className="text-red-400 uppercase font-black tracking-wider text-[10px]">{a.alert_type}</span>
+                          {a.village_id && (
+                            <span className="bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded font-bold capitalize">
+                              🏘️ {getVillageName(a.village_id)}
+                            </span>
+                          )}
+                          {a.reservoir_id && (
+                            <span className="bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded font-bold capitalize">
+                              💧 {getReservoirName(a.reservoir_id)}
+                            </span>
+                          )}
+                          <span className="text-slate-500 font-mono">
+                            {new Date(a.created_at).toLocaleString()}
                           </span>
-                        )}
-                        <span className="text-slate-500 font-mono">
-                          {new Date(a.created_at).toLocaleString()}
-                        </span>
+                        </div>
+                        <p className="text-slate-200 text-sm leading-relaxed">{a.message}</p>
                       </div>
-                      <p className="text-slate-200 text-sm leading-relaxed">{a.message}</p>
+
+                      <div className="flex gap-2 w-full md:w-auto justify-end" onClick={(e) => e.stopPropagation()}>
+                        {!a.is_read && (
+                          <button
+                            onClick={() => markAsRead(a.id)}
+                            className="bg-green-500/10 hover:bg-green-500/25 border border-green-500/20 text-green-400 rounded-xl px-4 py-2 font-bold transition"
+                          >
+                            Dismiss
+                          </button>
+                        )}
+                        <button
+                          onClick={() => deleteAlert(a.id)}
+                          className="bg-red-500/10 hover:bg-red-500/25 border border-red-500/20 text-red-400 rounded-xl px-4 py-2 font-bold transition"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex gap-2 w-full md:w-auto justify-end">
-                      {!a.is_read && (
-                        <button
-                          onClick={() => markAsRead(a.id)}
-                          className="bg-green-500/10 hover:bg-green-500/25 border border-green-500/20 text-green-400 rounded-xl px-4 py-2 font-bold transition"
-                        >
-                          Dismiss
-                        </button>
-                      )}
-                      <button
-                        onClick={() => deleteAlert(a.id)}
-                        className="bg-red-500/10 hover:bg-red-500/25 border border-red-500/20 text-red-400 rounded-xl px-4 py-2 font-bold transition"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    {/* Stakeholder Dispatch HUD dropdown */}
+                    {expandedAlertId === a.id && (
+                      <div className="bg-slate-800/80 border border-slate-700/40 rounded-2xl p-5 ml-4 space-y-3 transition-all animate-fadeIn">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-indigo-400">
+                          📩 Emergency Stakeholder Dispatch Ledger
+                        </h4>
+                        <hr className="border-slate-700/60" />
+                        {logsLoading ? (
+                          <div className="text-slate-400 text-[10px]">Loading delivery logs...</div>
+                        ) : dispatchLogs.length === 0 ? (
+                          <div className="text-slate-500 text-[10px]">No notification dispatch logs recorded for this alert.</div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {dispatchLogs.map((log) => (
+                              <div key={log.id} className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+                                <div className="space-y-1">
+                                  <div className="font-bold text-white text-xs">{log.recipient_name}</div>
+                                  <div className="text-[10px] text-slate-400">{log.recipient_role}</div>
+                                  <div className="text-[10px] text-slate-500 font-mono">
+                                    {log.channel === "sms" ? "📱" : "📧"} {log.destination}
+                                  </div>
+                                </div>
+                                <span className="bg-green-500/10 border border-green-500/20 text-green-400 text-[9px] uppercase font-black px-2 py-0.5 rounded">
+                                  {log.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

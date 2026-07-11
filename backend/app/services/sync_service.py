@@ -284,6 +284,9 @@ async def sync_all_data(db: Session):
                     created_at=datetime.now()
                 )
                 db.add(new_alert)
+                db.flush()
+                from app.services.notification_service import dispatch_alert_notifications
+                dispatch_alert_notifications(db, new_alert.id, village_id=v.id)
                 
     # 3. Update Rivers & flow rates
     from app.models.models import River, RiverHistory
