@@ -18,6 +18,83 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def run_schema_migrations():
+    """Ensure that new metadata columns exist in the SQLite database tables"""
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        # Reservoir migrations
+        try:
+            db.execute(text("ALTER TABLE reservoirs ADD COLUMN data_source VARCHAR(100) DEFAULT 'Estimated (Runoff Calculation)'"))
+            db.commit()
+            logger.info("Migrated reservoirs table: added data_source")
+        except Exception:
+            db.rollback()
+        
+        try:
+            db.execute(text("ALTER TABLE reservoirs ADD COLUMN last_updated_at DATETIME"))
+            db.commit()
+            logger.info("Migrated reservoirs table: added last_updated_at")
+        except Exception:
+            db.rollback()
+
+        try:
+            db.execute(text("ALTER TABLE reservoirs ADD COLUMN data_status VARCHAR(50) DEFAULT 'Estimated'"))
+            db.commit()
+            logger.info("Migrated reservoirs table: added data_status")
+        except Exception:
+            db.rollback()
+
+        # River migrations
+        try:
+            db.execute(text("ALTER TABLE rivers ADD COLUMN data_source VARCHAR(100) DEFAULT 'Simulated Telemetry'"))
+            db.commit()
+            logger.info("Migrated rivers table: added data_source")
+        except Exception:
+            db.rollback()
+        
+        try:
+            db.execute(text("ALTER TABLE rivers ADD COLUMN last_updated_at DATETIME"))
+            db.commit()
+            logger.info("Migrated rivers table: added last_updated_at")
+        except Exception:
+            db.rollback()
+
+        try:
+            db.execute(text("ALTER TABLE rivers ADD COLUMN data_status VARCHAR(50) DEFAULT 'Simulated'"))
+            db.commit()
+            logger.info("Migrated rivers table: added data_status")
+        except Exception:
+            db.rollback()
+
+        # Alert migrations
+        try:
+            db.execute(text("ALTER TABLE alerts ADD COLUMN data_source VARCHAR(100) DEFAULT 'AI Prediction Engine'"))
+            db.commit()
+            logger.info("Migrated alerts table: added data_source")
+        except Exception:
+            db.rollback()
+        
+        try:
+            db.execute(text("ALTER TABLE alerts ADD COLUMN issued_at DATETIME"))
+            db.commit()
+            logger.info("Migrated alerts table: added issued_at")
+        except Exception:
+            db.rollback()
+
+        try:
+            db.execute(text("ALTER TABLE alerts ADD COLUMN affected_locations VARCHAR(255)"))
+            db.commit()
+            logger.info("Migrated alerts table: added affected_locations")
+        except Exception:
+            db.rollback()
+            
+    finally:
+        db.close()
+
+# Run database schema migrations
+run_schema_migrations()
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
 

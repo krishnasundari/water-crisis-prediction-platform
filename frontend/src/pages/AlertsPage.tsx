@@ -344,6 +344,13 @@ export default function AlertsPage() {
                             {a.severity}
                           </span>
                           <span className="text-red-400 uppercase font-black tracking-wider text-[10px]">{a.alert_type}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-black border ${
+                            (a.data_source || 'AI Prediction Engine') === 'AI Prediction Engine'
+                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 font-extrabold'
+                          }`}>
+                            📡 {a.data_source || 'AI Prediction Engine'}
+                          </span>
                           {a.village_id && (
                             <span className="bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded font-bold capitalize">
                               🏘️ {getVillageName(a.village_id)}
@@ -355,10 +362,15 @@ export default function AlertsPage() {
                             </span>
                           )}
                           <span className="text-slate-500 font-mono">
-                            {new Date(a.created_at).toLocaleString()}
+                            {new Date(a.issued_at || a.created_at).toLocaleString()}
                           </span>
                         </div>
                         <p className="text-slate-200 text-sm leading-relaxed">{a.message}</p>
+                        {a.affected_locations && (
+                          <div className="text-[10px] text-slate-400 font-mono mt-1">
+                            📍 Affected Locations: <span className="text-slate-300 font-bold">{a.affected_locations}</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex gap-2 w-full md:w-auto justify-end" onClick={(e) => e.stopPropagation()}>

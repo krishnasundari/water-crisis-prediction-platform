@@ -347,7 +347,7 @@ cursor: "pointer",
                           ? "#ea580c"
                           : "#ca8a04"
                     }}>
-                      [{a.severity}] {a.alert_type}
+                      [{a.severity}] {a.alert_type} | 📡 {a.data_source || 'AI Prediction Engine'}
                     </span>
                     <span style={{ color: "#64748b" }}>
                       {new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

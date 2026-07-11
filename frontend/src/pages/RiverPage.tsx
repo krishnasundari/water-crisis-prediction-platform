@@ -237,6 +237,34 @@ export default function RiverPage() {
                         ))}
                       </select>
                     </div>
+
+                    {/* Data Quality & Transparency Header */}
+                    <div className="mt-3 bg-slate-900/80 border border-slate-700/50 rounded-2xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-xs">
+                      <div>
+                        <div className="text-slate-400 font-semibold flex items-center gap-1">
+                          <span>📡 Source:</span>
+                          <span className="text-slate-200 font-bold font-sans">
+                            {selectedRiver.data_source || "Simulated Telemetry"}
+                          </span>
+                        </div>
+                        <div className="text-slate-500 font-mono mt-1 text-[10px]">
+                          Last Updated: {new Date(selectedRiver.last_updated_at || selectedRiver.last_updated || new Date()).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Status:</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          (selectedRiver.data_status || "Simulated") === "Live"
+                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                            : (selectedRiver.data_status || "Simulated") === "Estimated"
+                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse"
+                            : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                        }`}>
+                          {selectedRiver.data_status || "Simulated"}
+                        </span>
+                      </div>
+                    </div>
+
                   </div>
 
                   {/* Visual Level Progress Bar */}

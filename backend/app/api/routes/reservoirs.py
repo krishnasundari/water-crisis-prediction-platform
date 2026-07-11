@@ -133,6 +133,9 @@ def get_reservoir_live_status(reservoir_id: int, db: Session = Depends(get_db)):
         "state": res.state,
         "latitude": res.latitude,
         "longitude": res.longitude,
+        "data_source": getattr(res, "data_source", "Estimated (Runoff Calculation)"),
+        "data_status": getattr(res, "data_status", "Estimated"),
+        "last_updated_at": getattr(res, "last_updated_at", None) or res.updated_at or res.created_at or datetime.now(),
         "last_updated": res.updated_at or res.created_at or datetime.now()
     }
 

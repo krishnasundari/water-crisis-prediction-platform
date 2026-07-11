@@ -35,6 +35,9 @@ def get_river_live_status(river_id: int, db: Session = Depends(get_db)):
         "trend": river.trend,
         "latitude": river.latitude,
         "longitude": river.longitude,
+        "data_source": getattr(river, "data_source", "Simulated Telemetry"),
+        "data_status": getattr(river, "data_status", "Simulated"),
+        "last_updated_at": getattr(river, "last_updated_at", None) or river.updated_at or river.created_at or datetime.now(),
         "last_updated": river.updated_at or river.created_at or datetime.now()
     }
 

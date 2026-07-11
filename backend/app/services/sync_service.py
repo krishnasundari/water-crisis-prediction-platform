@@ -2,20 +2,32 @@ import asyncio
 import requests
 from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models.models import Reservoir, Village, RainfallRecord, GroundwaterRecord, Prediction, Alert
+from app.models.models import Reservoir, Village, RainfallRecord, GroundwaterRecord, Prediction, Alert, River
 from app.ml.models.predictor import predict_water_crisis, predict_flood_risk
 from app.core.websocket_manager import manager
 from app.services.weather_service import calculate_distance
 
+# Import Providers
+from app.providers.dam_provider import DamProvider
+from app.providers.river_provider import RiverProvider
+from app.providers.alert_provider import AlertProvider
+
 async def sync_all_data(db: Session):
     """
-    Perform a complete database update query:
-    1. Loop all dams/reservoirs -> Query Open-Meteo live rain -> Save RainfallRecord -> Inflow calculation -> Update current levels.
+    Perform a complete database update query using Live Telemetry Providers:
+    1. Loop all dams/reservoirs -> Query Open-Meteo live rain -> Fetch CWC/NWIC live levels -> Save RainfallRecord -> Inflow calculation -> Update current levels & metadata.
     2. Loop all villages -> Query Open-Meteo live stats -> Save GroundwaterRecord -> Re-run ML predictions -> Save predictions.
-    3. Generate warning alerts if ML risk levels are high/critical.
-    4. Broadcast event via WebSocket to refresh React clients automatically.
+    3. Generate AI warning alerts if ML risk levels are high/critical.
+    4. Loop all rivers -> Fetch CWC river gauge heights -> Update levels, flow rates, and metadata.
+    5. Sync official disaster warnings from GDACS/NDMA feed.
+    6. Broadcast event via WebSocket to refresh React clients automatically.
     """
-    print("===== STARTING DATA SYNC ENGINE =====")
+    print("===== STARTING DATA SYNC ENGINE (PROVIDER ARCHITECTURE) =====")
+    
+    # Instantiate Providers
+    dam_prov = DamProvider()
+    river_prov = RiverProvider()
+    alert_prov = AlertProvider()
     
     # 1. Update Reservoirs
     reservoirs = db.query(Reservoir).all()
@@ -50,11 +62,21 @@ async def sync_all_data(db: Session):
         )
         db.add(rain_record)
         
-        # Calculate Inflow: Runoff coeff 0.35
-        inflow = rain * 0.35
-        # Cap current level at capacity
-        res.current_level = min(res.capacity, res.current_level + inflow)
+        # Calculate local rain-driven level baseline to supply as fallback
+        inflow_added = rain * 0.35
+        fallback_level = min(res.capacity, res.current_level + inflow_added)
+        
+        # Query Dam Provider
+        res_telemetry = dam_prov.get_reservoir_level(res.name, lat, lon, fallback_level)
+        
+        res.current_level = res_telemetry["water_level"]
+        res.data_source = res_telemetry["data_source"]
+        res.data_status = res_telemetry["data_status"]
+        res.last_updated_at = datetime.now()
         db.add(res)
+        
+        # Calculate Inflow
+        inflow = res_telemetry["inflow"] if res_telemetry["inflow"] is not None else inflow_added
         
         # Outflow calculation based on dam capacity levels
         pct = (res.current_level / res.capacity) * 100
@@ -68,6 +90,9 @@ async def sync_all_data(db: Session):
             outflow = 1.2
         else:
             outflow = 0.4
+            
+        if res_telemetry["outflow"] is not None:
+            outflow = res_telemetry["outflow"]
             
         # Log to ReservoirHistory snapshot table
         from app.models.models import ReservoirHistory
@@ -187,7 +212,6 @@ async def sync_all_data(db: Session):
             dam_pct = (nearest_res.current_level / nearest_res.capacity) * 100
             
         # Find nearest river to village
-        from app.models.models import River
         rivers_list = db.query(River).all()
         nearest_riv = None
         min_riv_dist = float("inf")
@@ -281,6 +305,8 @@ async def sync_all_data(db: Session):
                     severity=severity,
                     message=alert_msg,
                     is_read=False,
+                    data_source="AI Prediction Engine",
+                    issued_at=datetime.now(),
                     created_at=datetime.now()
                 )
                 db.add(new_alert)
@@ -289,11 +315,9 @@ async def sync_all_data(db: Session):
                 dispatch_alert_notifications(db, new_alert.id, village_id=v.id)
                 
     # 3. Update Rivers & flow rates
-    from app.models.models import River, RiverHistory
     rivers = db.query(River).all()
     for r in rivers:
-        # Get latest rainfall near the river coordinates (we'll query RainfallRecord for the closest reservoir)
-        reservoirs = db.query(Reservoir).all()
+        # Get latest rainfall near the river coordinates
         nearest_res = None
         min_dist = float("inf")
         for res in reservoirs:
@@ -310,14 +334,13 @@ async def sync_all_data(db: Session):
             if latest_rain:
                 rain = latest_rain.rainfall_amount
                 
-        # Update level and flow rates
+        # Calculate fallback simulated values
         if rain > 15.0:
-            r.trend = "Rising"
-            r.river_level = round(r.river_level + (rain * 0.08), 2)
-            r.flow_rate = round(r.flow_rate + (rain * 25.0), 2)
+            fallback_trend = "Rising"
+            fallback_level = round(r.river_level + (rain * 0.08), 2)
+            fallback_flow = round(r.flow_rate + (rain * 25.0), 2)
         else:
-            r.trend = "Falling"
-            # slow recession back to a base level
+            fallback_trend = "Falling"
             base_level = 3.0
             if "yamuna" in r.name.lower():
                 base_level = 2.0
@@ -326,16 +349,26 @@ async def sync_all_data(db: Session):
             elif "ganges" in r.name.lower():
                 base_level = 5.0
                 
-            r.river_level = max(base_level, round(r.river_level - 0.05, 2))
-            r.flow_rate = max(150.0, round(r.flow_rate - 15.0, 2))
+            fallback_level = max(base_level, round(r.river_level - 0.05, 2))
+            fallback_flow = max(150.0, round(r.flow_rate - 15.0, 2))
             
+        # Query River Provider
+        riv_telemetry = river_prov.get_river_gauge(
+            r.name, r.latitude, r.longitude, fallback_level, fallback_flow, fallback_trend
+        )
+        
+        r.river_level = riv_telemetry["river_level"]
+        r.flow_rate = riv_telemetry["flow_rate"]
+        r.trend = riv_telemetry["trend"]
+        r.data_source = riv_telemetry["data_source"]
+        r.data_status = riv_telemetry["data_status"]
+        r.last_updated_at = datetime.now()
         db.add(r)
         
         # Trigger River Flood Alert check
         if r.river_level >= r.danger_level:
             alert_msg = f"🌊 River Flood Alert: {r.name.upper()} has breached the critical danger level! Current: {r.river_level}m (Danger mark: {r.danger_level}m, Flow rate: {r.flow_rate} m3/s)."
             
-            # Check if this alert has already been raised today
             today_alert = db.query(Alert).filter(
                 Alert.alert_type == "flood",
                 Alert.message.like(f"%{r.name.upper()}%"),
@@ -348,11 +381,14 @@ async def sync_all_data(db: Session):
                     severity="high",
                     message=alert_msg,
                     is_read=False,
+                    data_source="Central Water Commission (CWC)",
+                    issued_at=datetime.now(),
                     created_at=datetime.now()
                 )
                 db.add(new_alert)
                 
         # Log to RiverHistory table
+        from app.models.models import RiverHistory
         r_history = RiverHistory(
             river_id=r.id,
             river_level=r.river_level,
@@ -362,8 +398,35 @@ async def sync_all_data(db: Session):
         )
         db.add(r_history)
 
+    # 4. Integrate Government/Official Alerts
+    try:
+        official_alerts = alert_prov.fetch_official_alerts()
+        for off_alert in official_alerts:
+            # Check if this alert has already been raised today
+            today_alert = db.query(Alert).filter(
+                Alert.alert_type == off_alert["alert_type"],
+                Alert.data_source == off_alert["data_source"],
+                Alert.message == off_alert["message"],
+                Alert.created_at >= datetime.now().replace(hour=0, minute=0, second=0)
+            ).first()
+            
+            if not today_alert:
+                new_alert = Alert(
+                    alert_type=off_alert["alert_type"],
+                    severity=off_alert["severity"],
+                    message=off_alert["message"],
+                    is_read=False,
+                    data_source=off_alert["data_source"],
+                    affected_locations=off_alert["affected_locations"],
+                    issued_at=datetime.now(),
+                    created_at=datetime.now()
+                )
+                db.add(new_alert)
+    except Exception as e:
+        print(f"Error compiling official alerts: {str(e)}")
+
     db.commit()
-    print("Villages, dams, rivers telemetry, ML models inference, and alerts synced.")
+    print("Villages, dams, rivers telemetry, ML models inference, official feeds, and alerts synced.")
     
     # Broadcast event via WebSocket
     await manager.broadcast({

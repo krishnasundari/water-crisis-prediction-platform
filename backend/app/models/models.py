@@ -84,6 +84,9 @@ class Reservoir(Base):
     state = Column(String(100), nullable=False)
     latitude = Column(Float)
     longitude = Column(Float)
+    data_source = Column(String(100), default="Estimated (Runoff Calculation)")
+    last_updated_at = Column(DateTime(timezone=True), server_default=func.now())
+    data_status = Column(String(50), default="Estimated")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
@@ -166,6 +169,9 @@ class Alert(Base):
     message = Column(Text, nullable=False)
     is_read = Column(Boolean, default=False)
     created_by = Column(Integer, ForeignKey("users.id"))
+    data_source = Column(String(100), default="AI Prediction Engine")
+    issued_at = Column(DateTime(timezone=True), server_default=func.now())
+    affected_locations = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     created_by_user = relationship("User", back_populates="alerts")
@@ -247,6 +253,9 @@ class River(Base):
     trend = Column(String(20), default="Steady") # "Rising", "Falling", "Steady"
     latitude = Column(Float)
     longitude = Column(Float)
+    data_source = Column(String(100), default="Simulated Telemetry")
+    last_updated_at = Column(DateTime(timezone=True), server_default=func.now())
+    data_status = Column(String(50), default="Simulated")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

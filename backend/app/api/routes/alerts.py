@@ -32,6 +32,8 @@ def create_alert(
         severity=alert.severity,
         message=alert.message,
         is_read=False,
+        data_source="AI Prediction Engine",
+        issued_at=datetime.now(),
         created_at=datetime.now()
     )
 

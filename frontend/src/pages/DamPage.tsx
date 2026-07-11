@@ -199,10 +199,12 @@ export default function DamPage() {
                         }}
                       >
                         <Popup>
-                          <div className="text-slate-800 font-bold text-xs space-y-1">
-                            <h4 className="font-extrabold capitalize">{dam.name} Reservoir</h4>
+                          <div className="text-slate-800 font-bold text-[10px] space-y-1">
+                            <h4 className="font-extrabold capitalize text-xs">{dam.name} Reservoir</h4>
                             <p>Storage: {dam.storage_percentage}%</p>
                             <p>Status: {dam.overflow_status}</p>
+                            <p className="text-slate-500 font-mono text-[9px]">Source: {dam.data_source || 'Estimated'}</p>
+                            <p className="text-slate-500 font-mono text-[9px]">Quality: {dam.data_status || 'Estimated'}</p>
                           </div>
                         </Popup>
                       </Marker>
@@ -240,6 +242,34 @@ export default function DamPage() {
                         ))}
                       </select>
                     </div>
+
+                    {/* Data Quality & Transparency Header */}
+                    <div className="mt-3 bg-slate-900/80 border border-slate-700/50 rounded-2xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-xs">
+                      <div>
+                        <div className="text-slate-400 font-semibold flex items-center gap-1">
+                          <span>📡 Source:</span>
+                          <span className="text-slate-200 font-bold font-sans">
+                            {selectedDam.data_source || "Estimated (Runoff Calculation)"}
+                          </span>
+                        </div>
+                        <div className="text-slate-500 font-mono mt-1 text-[10px]">
+                          Last Updated: {new Date(selectedDam.last_updated_at || selectedDam.last_updated || new Date()).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Status:</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          (selectedDam.data_status || "Estimated") === "Live"
+                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                            : (selectedDam.data_status || "Estimated") === "Estimated"
+                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse"
+                            : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                        }`}>
+                          {selectedDam.data_status || "Estimated"}
+                        </span>
+                      </div>
+                    </div>
+
                   </div>
 
                   {/* Circular Storage Progress Bar */}
