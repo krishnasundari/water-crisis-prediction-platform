@@ -138,7 +138,7 @@ function MapController({
     // 1. Zoom into specific Village
     if (selectedVillage !== "all") {
       const v = villages.find((vil) => vil.name === selectedVillage);
-      if (v) {
+      if (v && isValidCoord(v.latitude, v.longitude)) {
         map.setView([v.latitude, v.longitude], 12, { animate: true });
       }
       return;
@@ -147,7 +147,7 @@ function MapController({
     // 2. Zoom into specific District
     if (selectedDistrict !== "all") {
       const dist = districtCentroids.find((d) => d.name === selectedDistrict);
-      if (dist) {
+      if (dist && isValidCoord(dist.latitude, dist.longitude)) {
         map.setView([dist.latitude, dist.longitude], 9, { animate: true });
       }
       return;
@@ -156,7 +156,7 @@ function MapController({
     // 3. Zoom into specific State
     if (selectedState !== "all") {
       const points: [number, number][] = villages
-        .filter((v) => v.state.toLowerCase() === selectedState.toLowerCase())
+        .filter((v) => (v.state || "").toLowerCase() === selectedState.toLowerCase() && isValidCoord(v.latitude, v.longitude))
         .map((v) => [v.latitude, v.longitude]);
 
       if (points.length > 0) {
@@ -166,13 +166,21 @@ function MapController({
     }
 
     // 4. Zoom to National Scope (All points)
-    const points: [number, number][] = villages.map((v) => [v.latitude, v.longitude]);
+    const points: [number, number][] = villages
+      .filter((v) => isValidCoord(v.latitude, v.longitude))
+      .map((v) => [v.latitude, v.longitude]);
     if (points.length > 0) {
       map.fitBounds(points, { padding: [50, 50], animate: true });
     }
   }, [selectedState, selectedDistrict, selectedVillage, villages, map]);
 
   return null;
+}
+
+// Helper coordinate validator
+function isValidCoord(lat: number, lng: number) {
+  return lat !== null && lat !== undefined && !isNaN(lat) && lat !== 0 &&
+         lng !== null && lng !== undefined && !isNaN(lng) && lng !== 0;
 }
 
 // ============================
@@ -244,40 +252,42 @@ export default function MapsPage() {
 
   // Helper selectors
   const statesList = useMemo(() => {
-    return Array.from(new Set(villages.map((v) => v.state))).sort();
+    return Array.from(new Set(villages.map((v) => v.state).filter(Boolean))).sort();
   }, [villages]);
 
   const districtsList = useMemo(() => {
     const filtered = selectedState === "all"
       ? villages
       : villages.filter((v) => v.state === selectedState);
-    return Array.from(new Set(filtered.map((v) => v.district))).sort();
+    return Array.from(new Set(filtered.map((v) => v.district).filter(Boolean))).sort();
   }, [villages, selectedState]);
 
   const villagesList = useMemo(() => {
     const filtered = selectedDistrict === "all"
       ? villages
       : villages.filter((v) => v.district === selectedDistrict);
-    return filtered.map((v) => v.name).sort();
+    return filtered.map((v) => v.name).filter(Boolean).sort();
   }, [villages, selectedDistrict]);
 
   // Aggregate District Telemetry
   const districtCentroids = useMemo(() => {
     const mapDistricts = new Map<string, Village[]>();
     villages.forEach((v) => {
-      if (!mapDistricts.has(v.district)) {
-        mapDistricts.set(v.district, []);
+      if (v.district) {
+        if (!mapDistricts.has(v.district)) {
+          mapDistricts.set(v.district, []);
+        }
+        mapDistricts.get(v.district)!.push(v);
       }
-      mapDistricts.get(v.district)!.push(v);
     });
 
     const list: any[] = [];
     mapDistricts.forEach((vils, districtName) => {
       // Find average lat/lon centroid
-      const sumLat = vils.reduce((sum, v) => sum + v.latitude, 0);
-      const sumLon = vils.reduce((sum, v) => sum + v.longitude, 0);
-      const avgLat = sumLat / vils.length;
-      const avgLon = sumLon / vils.length;
+      const sumLat = vils.reduce((sum, v) => sum + (v.latitude || 0), 0);
+      const sumLon = vils.reduce((sum, v) => sum + (v.longitude || 0), 0);
+      const avgLat = vils.length > 0 ? sumLat / vils.length : 22.5;
+      const avgLon = vils.length > 0 ? sumLon / vils.length : 79.0;
 
       // Group predictions inside this district
       const villageIds = vils.map((v) => v.id);
@@ -294,23 +304,24 @@ export default function MapsPage() {
       // Sourced dams inside district
       const distDams = reservoirs.filter((r) => r.district === districtName);
       const avgDamStorage = distDams.length > 0
-        ? distDams.reduce((sum, r) => sum + (r.current_level / r.capacity * 100), 0) / distDams.length
+        ? distDams.reduce((sum, r) => sum + (r.current_level / (r.capacity || 1) * 100), 0) / distDams.length
         : 50.0;
 
       // Sourced rivers in district
-      const distRivers = rivers.filter((riv) => {
-        // Simple mapping based on district strings or close proximity
-        return riv.name.toLowerCase().includes(districtName.toLowerCase()) || 
-               districtName === "Gaya" && riv.name === "Ganges" ||
-               districtName === "Pongodu" && riv.name === "Yamuna" ||
-               districtName === "Ponugodu" && riv.name === "Godavari";
+      const distRivers = (rivers || []).filter((riv) => {
+        const rName = (riv.name || "").toLowerCase();
+        const dName = (districtName || "").toLowerCase();
+        return rName.includes(dName) || 
+               dName === "gaya" && rName === "ganges" ||
+               dName === "pongodu" && rName === "yamuna" ||
+               dName === "ponugodu" && rName === "godavari";
       });
 
       const riversDangerBreach = distRivers.some((riv) => riv.river_level >= riv.danger_level);
 
       // Active Alerts count
-      const activeAlerts = alerts.filter((a) => !a.is_read && villageIds.includes(a.village_id || -1));
-      const hasCriticalAlert = activeAlerts.some((a) => a.severity === "critical");
+      const activeAlerts = (alerts || []).filter((a) => !a.is_read && villageIds.includes(a.village_id || -1));
+      const hasCriticalAlert = activeAlerts.some((a) => (a.severity || "").toLowerCase() === "critical");
 
       // Compounding Color Code logic
       let color = "#10b981"; // Green (Safe)
@@ -318,10 +329,10 @@ export default function MapsPage() {
       if (hasCriticalAlert || avgFloodProbability > 70 || riversDangerBreach) {
         color = "#ef4444"; // Red (Critical)
         status = "Critical Warning";
-      } else if (avgFloodProbability > 45 || activeAlerts.some((a) => a.severity === "high")) {
+      } else if (avgFloodProbability > 45 || activeAlerts.some((a) => (a.severity || "").toLowerCase() === "high")) {
         color = "#f97316"; // Orange (High)
         status = "High Threat";
-      } else if (avgFloodProbability > 25 || activeAlerts.some((a) => a.severity === "medium")) {
+      } else if (avgFloodProbability > 25 || activeAlerts.some((a) => (a.severity || "").toLowerCase() === "medium")) {
         color = "#eab308"; // Yellow (Moderate)
         status = "Moderate Warning";
       }
@@ -358,7 +369,7 @@ export default function MapsPage() {
 
   const getVillageRiskColor = (id: number) => {
     const latest = predictions.find((p) => p.village_id === id);
-    if (!latest) return "#10b981"; // Green
+    if (!latest || !latest.risk_level) return "#10b981"; // Green
     const lvl = latest.risk_level.toLowerCase();
     if (lvl === "high") return "#ef4444"; // Red
     if (lvl === "moderate") return "#eab308"; // Yellow
@@ -367,12 +378,12 @@ export default function MapsPage() {
 
   const getVillageRisk = (id: number) => {
     const latest = predictions.find((p) => p.village_id === id);
-    return latest ? latest.risk_level : "safe";
+    return latest && latest.risk_level ? latest.risk_level : "safe";
   };
 
   const getVillageIcon = (id: number) => {
     const latest = predictions.find((p) => p.village_id === id);
-    if (!latest) return safeVillageIcon;
+    if (!latest || !latest.risk_level) return safeVillageIcon;
     const lvl = latest.risk_level.toLowerCase();
     if (lvl === "high") return highVillageIcon;
     if (lvl === "moderate") return moderateVillageIcon;
@@ -483,7 +494,7 @@ export default function MapsPage() {
             />
 
             {/* Render Evacuation Route */}
-            {activeRoute && (
+            {activeRoute && activeRoute.route_coordinates && (
               <>
                 <Polyline
                   positions={activeRoute.route_coordinates}
@@ -494,24 +505,26 @@ export default function MapsPage() {
                     dashArray: activeRoute.routing_mode === "fallback_direct" ? "10, 10" : undefined,
                   }}
                 />
-                <Marker
-                  position={[activeRoute.refuge.latitude, activeRoute.refuge.longitude]}
-                  icon={refugeIcon}
-                >
-                  <Popup>
-                    <div style={{ minWidth: "150px" }} className="text-slate-900">
-                      <h4 style={{ color: "#b45309", margin: "0 0 5px 0" }}>🔰 Designated Safe Refuge</h4>
-                      <p style={{ margin: "2px 0", fontSize: "11px" }}><strong>Name:</strong> {activeRoute.refuge.name}</p>
-                    </div>
-                  </Popup>
-                </Marker>
+                {activeRoute.refuge && isValidCoord(activeRoute.refuge.latitude, activeRoute.refuge.longitude) && (
+                  <Marker
+                    position={[activeRoute.refuge.latitude, activeRoute.refuge.longitude]}
+                    icon={refugeIcon}
+                  >
+                    <Popup>
+                      <div style={{ minWidth: "150px" }} className="text-slate-900">
+                        <h4 style={{ color: "#b45309", margin: "0 0 5px 0" }}>🔰 Designated Safe Refuge</h4>
+                        <p style={{ margin: "2px 0", fontSize: "11px" }}><strong>Name:</strong> {activeRoute.refuge.name}</p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                )}
               </>
             )}
 
             {/* 1. DISTRICT CENTROIDS OVERLAYS (Shown when selectedDistrict is 'all') */}
             {selectedDistrict === "all" &&
               districtCentroids
-                .filter((d) => selectedState === "all" || d.state === selectedState)
+                .filter((d) => (selectedState === "all" || d.state === selectedState) && isValidCoord(d.latitude, d.longitude))
                 .map((dist) => (
                   <Circle
                     key={`district-centroid-${dist.name}`}
@@ -551,7 +564,7 @@ export default function MapsPage() {
             {/* 2. SPECIFIC VILLAGE MARKERS (Shown when selectedDistrict is specific) */}
             {selectedDistrict !== "all" &&
               villages
-                .filter((v) => v.district === selectedDistrict)
+                .filter((v) => v.district === selectedDistrict && isValidCoord(v.latitude, v.longitude))
                 .map((village) => (
                   <Marker
                     key={`village-marker-${village.id}`}
@@ -596,7 +609,7 @@ export default function MapsPage() {
                 .filter((a: any) => !a.is_read && a.village_id)
                 .map((alert: any) => {
                   const village = villages.find((v: any) => v.id === alert.village_id);
-                  if (!village || village.district !== selectedDistrict) return null;
+                  if (!village || village.district !== selectedDistrict || !isValidCoord(village.latitude, village.longitude)) return null;
                   return (
                     <Circle
                       key={`alert-halo-${alert.id}`}
@@ -616,7 +629,7 @@ export default function MapsPage() {
             {/* 4. RESERVOIR/DAM MARKERS (Shown inside selected district) */}
             {selectedDistrict !== "all" &&
               reservoirs
-                .filter((r) => r.district === selectedDistrict)
+                .filter((r) => r.district === selectedDistrict && isValidCoord(r.latitude, r.longitude))
                 .map((reservoir) => (
                   <Marker
                     key={`res-marker-${reservoir.id}`}
