@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 
-const API_BASE = "http://127.0.0.1:8000/api/v1";
-
 export default function ReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -15,53 +13,42 @@ export default function ReportsPage() {
     filters: "",
   });
 
+  const getBaseURL = () => {
+    return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:8000/api/v1"
+      : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
+  };
+
   const loadReports = () => {
-    fetch(`${API_BASE}/reports`)
+    fetch(`${getBaseURL()}/reports`)
       .then((res) => res.json())
       .then((data) => {
-        console.log(data);
         setReports(data);
       })
-      .catch((err) => console.error(err));
+      .catch((err) => console.error("Error loading reports:", err));
   };
 
   useEffect(() => {
     loadReports();
   }, []);
-  const filteredReports = reports.filter((report) =>
-  report.title.toLowerCase().includes(searchTerm.toLowerCase())
-);
-const totalReports = reports.length;
 
-const pdfReports = reports.filter(
-  (r) => r.report_type === "pdf"
-).length;
+  const generateReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGenerating(true);
 
-const excelReports = reports.filter(
-  (r) => r.report_type === "excel"
-).length;
-
-const latestReport =
-  reports.length > 0
-    ? new Date(reports[0].created_at).toLocaleDateString()
-    : "N/A";
-
-  const generateReport = async () => {
     try {
       let filtersObject = {};
-      setGenerating(true);
-
       if (newReport.filters.trim() !== "") {
         try {
           filtersObject = JSON.parse(newReport.filters);
-          setGenerating(true);
         } catch {
-          alert("Filters must be valid JSON.");
+          alert("Filters must be valid JSON object.");
+          setGenerating(false);
           return;
         }
       }
 
-      await fetch(`${API_BASE}/reports/generate`, {
+      const res = await fetch(`${getBaseURL()}/reports/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -74,341 +61,232 @@ const latestReport =
         }),
       });
 
-      setNewReport({
-        report_type: "pdf",
-        include_predictions: true,
-        include_forecasts: true,
-        filters: "",
-      });
-
-      await loadReports();
-      alert("✅ Report generated successfully!");
-      setGenerating(false);
+      if (res.ok) {
+        setNewReport({
+          report_type: "pdf",
+          include_predictions: true,
+          include_forecasts: true,
+          filters: "",
+        });
+        loadReports();
+      }
     } catch (err) {
       console.error(err);
-      alert("Failed to generate report.");
+    } finally {
       setGenerating(false);
     }
   };
 
   const downloadReport = (id: number) => {
-    window.open(`${API_BASE}/reports/${id}/download`, "_blank");
+    window.open(`${getBaseURL()}/reports/${id}/download`, "_blank");
   };
 
   const deleteReport = async (id: number) => {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this report?"
-    );
-
-    if (!confirmDelete) return;
-
-    await fetch(`${API_BASE}/reports/${id}`, {
-      method: "DELETE",
-    });
-
-    loadReports();
+    if (!window.confirm("Are you sure you want to delete this report from logs?")) return;
+    try {
+      await fetch(`${getBaseURL()}/reports/${id}`, {
+        method: "DELETE",
+      });
+      loadReports();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
+  const filteredReports = reports.filter((r) =>
+    r.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <div style={{ display: "flex" }}>
+    <div className="flex h-screen bg-slate-900 text-slate-100 overflow-hidden">
       <Sidebar />
 
-      <div
-        style={{
-          flex: 1,
-          padding: "30px",
-          background: "#f5f7fa",
-          minHeight: "100vh",
-        }}
-      >
-        <h1>📄 Reports</h1>
-
-        <div
-          style={{
-            background: "white",
-            padding: "20px",
-            borderRadius: "10px",
-            marginBottom: "25px",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Generate New Report</h2>
-
-          <div style={{ marginBottom: "15px" }}>
-            <label style={{ marginRight: "10px" }}>
-              Report Type:
-            </label>
-
-            <select
-              value={newReport.report_type}
-              onChange={(e) =>
-                setNewReport({
-                  ...newReport,
-                  report_type: e.target.value,
-                })
-              }
-              style={{
-                padding: "8px",
-                width: "180px",
-              }}
-            >
-              <option value="pdf">PDF</option>
-              <option value="excel">Excel</option>
-            </select>
+      <div className="flex-1 flex flex-col overflow-y-auto">
+        
+        {/* HEADER NAVBAR */}
+        <header className="bg-slate-800/80 border-b border-slate-700/60 p-6 sticky top-0 z-40 backdrop-blur-md">
+          <div>
+            <h2 className="text-2xl font-bold bg-gradient-to-r from-teal-400 via-emerald-400 to-cyan-300 bg-clip-text text-transparent">
+              📄 Situation Reports & Analytics Center
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">
+              Generate PDF Situation Briefs, Tabular Hydrological Logs & System Audit Trails
+            </p>
           </div>
+        </header>
 
-          <div style={{ marginBottom: "15px" }}>
-            <label>
-              <input
-                type="checkbox"
-                checked={newReport.include_predictions}
-                onChange={(e) =>
-                  setNewReport({
-                    ...newReport,
-                    include_predictions: e.target.checked,
-                  })
-                }
-              />
+        {/* CONTAINER MAIN VIEW */}
+        <main className="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
 
-              <span style={{ marginLeft: "8px" }}>
-                Include Predictions
-              </span>
-            </label>
-          </div>
+          {/* DUAL WORKSPACE: FORM & STATS */}
+          <div className="grid lg:grid-cols-3 gap-6">
+            
+            {/* GENERATE FORM */}
+            <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-6 space-y-4">
+              <div>
+                <span className="text-xs uppercase tracking-widest text-teal-400 font-bold font-mono">Report compiler</span>
+                <h3 className="text-lg font-bold text-slate-100 mt-1">Compile New Briefing</h3>
+              </div>
 
-          <div style={{ marginBottom: "15px" }}>
-            <label>
-              <input
-                type="checkbox"
-                checked={newReport.include_forecasts}
-                onChange={(e) =>
-                  setNewReport({
-                    ...newReport,
-                    include_forecasts: e.target.checked,
-                  })
-                }
-              />
-
-              <span style={{ marginLeft: "8px" }}>
-                Include Forecasts
-              </span>
-            </label>
-          </div>
-
-          <div style={{ marginBottom: "20px" }}>
-            <label>
-              Filters (JSON)
-            </label>
-
-            <textarea
-              rows={5}
-              placeholder='Example: {"district":"Patna"}'
-              value={newReport.filters}
-              onChange={(e) =>
-                setNewReport({
-                  ...newReport,
-                  filters: e.target.value,
-                })
-              }
-              style={{
-                width: "100%",
-                marginTop: "8px",
-                padding: "10px",
-                resize: "vertical",
-              }}
-            />
-          </div>
-
-         <button
-    onClick={generateReport}
-    disabled={generating}
-            style={{
-              padding: "10px 20px",
-              background: "#1565c0",
-              color: "white",
-              border: "none",
-              borderRadius: "5px",
-              cursor: generating ? "not-allowed" : "pointer",
-opacity: generating ? 0.6 : 1,
-            }}
-          >
-            {generating ? "Generating..." : "Generate Report"}
-          </button>
-        </div>
-
-        <div
-          style={{
-            background: "white",
-            borderRadius: "10px",
-            padding: "20px",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-          }}
-        ><div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
-    gap: "20px",
-    marginBottom: "25px",
-  }}
->
-  <div
-    style={{
-      background: "#e3f2fd",
-      padding: "18px",
-      borderRadius: "10px",
-    }}
-  >
-    <h3>📄 Total Reports</h3>
-    <h1>{totalReports}</h1>
-  </div>
-
-  <div
-    style={{
-      background: "#e8f5e9",
-      padding: "18px",
-      borderRadius: "10px",
-    }}
-  >
-    <h3>📥 PDF Reports</h3>
-    <h1>{pdfReports}</h1>
-  </div>
-
-  <div
-    style={{
-      background: "#fff8e1",
-      padding: "18px",
-      borderRadius: "10px",
-    }}
-  >
-    <h3>📊 Excel Reports</h3>
-    <h1>{excelReports}</h1>
-  </div>
-
-  <div
-    style={{
-      background: "#f3e5f5",
-      padding: "18px",
-      borderRadius: "10px",
-    }}
-  >
-    <h3>🕒 Latest Report</h3>
-    <h1 style={{ fontSize: "18px" }}>{latestReport}</h1>
-  </div>
-</div>
-          <h2 style={{ marginTop: 0 }}>Generated Reports</h2>
-          <input
-  type="text"
-  placeholder="🔍 Search reports..."
-  value={searchTerm}
-  onChange={(e) => setSearchTerm(e.target.value)}
-  style={{
-    width: "100%",
-    padding: "10px",
-    marginBottom: "20px",
-    borderRadius: "6px",
-    border: "1px solid #ccc",
-  }}
-/>
-
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  background: "#1976d2",
-                  color: "white",
-                }}
-              >
-                <th style={{ padding: "10px" }}>ID</th>
-                <th style={{ padding: "10px" }}>Title</th>
-                <th style={{ padding: "10px" }}>Type</th>
-                <th style={{ padding: "10px" }}>Created At</th>
-                <th style={{ padding: "10px" }}>Download</th>
-                <th style={{ padding: "10px" }}>Delete</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {filteredReports.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    style={{
-                      textAlign: "center",
-                      padding: "30px",
-                    }}
+              <form onSubmit={generateReport} className="space-y-4 text-xs">
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold">Report Format Type</label>
+                  <select
+                    value={newReport.report_type}
+                    onChange={(e) => setNewReport({ ...newReport, report_type: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
                   >
-                    No reports generated yet.
-                  </td>
-                </tr>
-              ) : (
-                filteredReports.map((report) => (
-                  <tr
-                    key={report.id}
-                    style={{
-                      borderBottom: "1px solid #ddd",
-                    }}
-                  >
-                    <td style={{ padding: "10px" }}>{report.id}</td>
+                    <option value="pdf">Acrobat PDF Document 📄</option>
+                    <option value="csv">Tabular CSV Spreadsheet 📊</option>
+                  </select>
+                </div>
 
-                    <td style={{ padding: "10px" }}>
-                      {report.title}
-                    </td>
+                <div className="space-y-3 pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newReport.include_predictions}
+                      onChange={(e) => setNewReport({ ...newReport, include_predictions: e.target.checked })}
+                      className="rounded bg-slate-900 border-slate-700 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className="text-slate-300 font-semibold">Include ML Hazard Models</span>
+                  </label>
 
-                    <td
-                      style={{
-                        padding: "10px",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {report.report_type}
-                    </td>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newReport.include_forecasts}
+                      onChange={(e) => setNewReport({ ...newReport, include_forecasts: e.target.checked })}
+                      className="rounded bg-slate-900 border-slate-700 text-teal-600 focus:ring-teal-500"
+                    />
+                    <span className="text-slate-300 font-semibold">Include Hydrology Outlooks</span>
+                  </label>
+                </div>
 
-                    <td style={{ padding: "10px" }}>
-                      {new Date(report.created_at).toLocaleString()}
-                    </td>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold">JSON Filter Scope (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder='e.g. {"district": "Gaya"}'
+                    value={newReport.filters}
+                    onChange={(e) => setNewReport({ ...newReport, filters: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
+                  />
+                </div>
 
-                    <td style={{ padding: "10px" }}>
-                      <button
-                        onClick={() => downloadReport(report.id)}
-                        style={{
-                          background: "green",
-                          color: "white",
-                          border: "none",
-                          padding: "8px 14px",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Download
-                      </button>
-                    </td>
+                <button
+                  type="submit"
+                  disabled={generating}
+                  className="w-full bg-teal-600 hover:bg-teal-500 disabled:bg-slate-700 text-white rounded-xl py-2.5 font-semibold transition"
+                >
+                  {generating ? "Compiling Brief..." : "⚡ Compile Situation Brief"}
+                </button>
+              </form>
+            </div>
 
-                    <td style={{ padding: "10px" }}>
-                      <button
-                        onClick={() => deleteReport(report.id)}
-                        style={{
-                          background: "red",
-                          color: "white",
-                          border: "none",
-                          padding: "8px 14px",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+            {/* LEDGER OVERVIEW STATS */}
+            <div className="lg:col-span-2 bg-slate-800/40 border border-slate-700/50 rounded-3xl p-6 flex flex-col justify-between space-y-4">
+              <div>
+                <span className="text-xs uppercase tracking-widest text-teal-400 font-bold font-mono">Briefing stats</span>
+                <h3 className="text-lg font-bold text-slate-100 mt-1">Compiled Reports Overview</h3>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-black text-white font-mono">{reports.length}</div>
+                  <div className="text-[10px] text-slate-400 mt-1 font-semibold uppercase">Total Briefs</div>
+                </div>
+                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-black text-teal-400 font-mono">
+                    {reports.filter((r) => r.report_type === "pdf").length}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1 font-semibold uppercase">PDF Format</div>
+                </div>
+                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 text-center">
+                  <div className="text-2xl font-black text-emerald-400 font-mono">
+                    {reports.filter((r) => r.report_type === "csv").length}
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1 font-semibold uppercase">CSV Format</div>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <label className="text-xs text-slate-400 font-semibold">Search Generated Archives</label>
+                <input
+                  type="text"
+                  placeholder="Filter logs by brief name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+
+          </div>
+
+          {/* GENERATED ARCHIVES LEDGER */}
+          <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-6 space-y-4">
+            <div>
+              <span className="text-xs uppercase tracking-widest text-teal-400 font-bold font-mono">Briefing archive</span>
+              <h3 className="text-lg font-bold text-slate-100 mt-1">Generated Briefings Archives</h3>
+            </div>
+
+            {filteredReports.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 text-sm">
+                No generated briefing logs match your search. Compile one above!
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-slate-700/60">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-900/60 border-b border-slate-700 text-slate-300 font-bold uppercase tracking-wider">
+                      <th className="p-4">ID</th>
+                      <th className="p-4">Report Description</th>
+                      <th className="p-4">Format</th>
+                      <th className="p-4">Generated At</th>
+                      <th className="p-4 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {filteredReports.map((r) => (
+                      <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
+                        <td className="p-4 font-mono font-bold text-slate-400">{r.id}</td>
+                        <td className="p-4 font-bold text-white uppercase">{r.title}</td>
+                        <td className="p-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black border uppercase ${
+                            r.report_type === "pdf"
+                              ? "bg-red-500/10 border-red-500/20 text-red-400"
+                              : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                          }`}>
+                            {r.report_type}
+                          </span>
+                        </td>
+                        <td className="p-4 font-mono text-slate-400">
+                          {new Date(r.created_at).toLocaleString()}
+                        </td>
+                        <td className="p-4 text-center flex justify-center gap-2">
+                          <button
+                            onClick={() => downloadReport(r.id)}
+                            className="bg-teal-500/10 hover:bg-teal-500/30 text-teal-300 border border-teal-500/20 rounded px-3 py-1 font-bold transition"
+                          >
+                            ⬇️ Download
+                          </button>
+                          <button
+                            onClick={() => deleteReport(r.id)}
+                            className="bg-red-500/10 hover:bg-red-500/30 text-red-300 border border-red-500/20 rounded px-3 py-1 font-bold transition"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+        </main>
       </div>
     </div>
   );

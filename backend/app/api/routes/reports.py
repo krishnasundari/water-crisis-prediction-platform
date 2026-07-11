@@ -19,13 +19,7 @@ def list_reports(db: Session = Depends(get_db)):
 @router.post("/generate")
 def create_report(report: ReportGenerateRequest, db: Session = Depends(get_db)):
     title = f"{report.report_type.upper()} Report {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}"
-    data = {
-        "Generated On": str(datetime.now()),
-        "Include Predictions": report.include_predictions,
-        "Include Forecasts": report.include_forecasts,
-        "Filters": json.dumps(report.filters or {})
-    }
-    file_path = generate_report(report.report_type, title, data)
+    file_path = generate_report(report.report_type, title, db)
     db_report = Report(
         title=title,
         report_type=report.report_type.lower(),
