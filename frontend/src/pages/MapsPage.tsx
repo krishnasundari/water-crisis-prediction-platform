@@ -97,9 +97,9 @@ interface Reservoir {
 interface River {
   id: number;
   name: string;
-  river_level: float;
-  danger_level: float;
-  flow_rate: float;
+  river_level: number;
+  danger_level: number;
+  flow_rate: number;
   trend: string;
   latitude: number;
   longitude: number;
