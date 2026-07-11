@@ -363,9 +363,9 @@ export default function MapsPage() {
     return districtCentroids.find((d) => d.name === selectedDistrict) || null;
   }, [selectedDistrict, districtCentroids]);
 
-  const round = (val: number, decimals: number) => {
+  function round(val: number, decimals: number) {
     return Number(val.toFixed(decimals));
-  };
+  }
 
   const getVillageRiskColor = (id: number) => {
     const latest = predictions.find((p) => p.village_id === id);
