@@ -133,7 +133,7 @@ export default function SearchPage() {
   };
 
   // Submerge calculator for nearby villages
-  const getVillageFloodStatus = (distanceKm: number, projectedLevel: number) => {
+  const getVillageFloodStatus = (_distanceKm: number, projectedLevel: number) => {
     if (projectedLevel >= 100) {
       return {
         status: "🔴 Submerged / Breached",

@@ -124,14 +124,12 @@ function MapController({
   selectedDistrict,
   selectedVillage,
   villages,
-  reservoirs,
   districtCentroids,
 }: {
   selectedState: string;
   selectedDistrict: string;
   selectedVillage: string;
   villages: Village[];
-  reservoirs: Reservoir[];
   districtCentroids: any[];
 }) {
   const map = useMap();
@@ -367,6 +365,11 @@ export default function MapsPage() {
     return "#10b981"; // Green
   };
 
+  const getVillageRisk = (id: number) => {
+    const latest = predictions.find((p) => p.village_id === id);
+    return latest ? latest.risk_level : "safe";
+  };
+
   const getVillageIcon = (id: number) => {
     const latest = predictions.find((p) => p.village_id === id);
     if (!latest) return safeVillageIcon;
@@ -476,7 +479,6 @@ export default function MapsPage() {
               selectedDistrict={selectedDistrict}
               selectedVillage={selectedVillage}
               villages={villages}
-              reservoirs={reservoirs}
               districtCentroids={districtCentroids}
             />
 
@@ -564,7 +566,7 @@ export default function MapsPage() {
                         <hr />
                         <p><strong>Population:</strong> {village.population.toLocaleString()}</p>
                         <p><strong>Water Source:</strong> {village.water_source}</p>
-                        <p><strong>Drought Risk:</strong> <span style={{ color: getVillageRiskColor(village.id), fontWeight: "bold" }}>{(riskLookup.get(village.id) || "safe").toUpperCase()}</span></p>
+                        <p><strong>Drought Risk:</strong> <span style={{ color: getVillageRiskColor(village.id), fontWeight: "bold" }}>{getVillageRisk(village.id).toUpperCase()}</span></p>
                         
                         <button
                           onClick={() => handleCalculateRoute(village.id)}

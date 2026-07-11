@@ -5,7 +5,6 @@ import {
   TileLayer,
   Marker,
   Popup,
-  Circle,
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
@@ -56,7 +55,6 @@ export default function DamPage() {
   const [dams, setDams] = useState<any[]>([]);
   const [selectedDam, setSelectedDam] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
 
   const getBaseURL = () => {
     return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
