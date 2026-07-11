@@ -6,6 +6,7 @@ import {
   Marker,
   Popup,
   Circle,
+  Polyline,
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
@@ -50,6 +51,15 @@ const highVillageIcon = new L.Icon({
 const reservoirIcon = new L.Icon({
   iconUrl:
     "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png",
+  shadowUrl:
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+
+const refugeIcon = new L.Icon({
+  iconUrl:
+    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-gold.png",
   shadowUrl:
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
   iconSize: [25, 41],
@@ -160,11 +170,30 @@ export default function MapsPage() {
   const [reservoirs, setReservoirs] = useState<Reservoir[]>([]);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [activeRoute, setActiveRoute] = useState<any>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
   const [userLocation, setUserLocation] =
   useState<[number, number] | null>(null);
   const [search, setSearch] = useState("");
 const [districtFilter, setDistrictFilter] = useState("All");
 const [riskFilter, setRiskFilter] = useState("All");
+
+  const handleCalculateRoute = async (villageId: number) => {
+    setRouteLoading(true);
+    try {
+      const res = await fetch(`${API}/evacuation/route?village_id=${villageId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setActiveRoute(data);
+      } else {
+        console.error("Failed to fetch evacuation route");
+      }
+    } catch (err) {
+      console.error("Evacuation routing error:", err);
+    } finally {
+      setRouteLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetch(`${API}/villages`)
@@ -469,6 +498,7 @@ const filteredVillages = useMemo(() => {
             borderRadius: "12px",
             padding: "15px",
             boxShadow: "0 2px 10px rgba(0,0,0,.1)",
+            position: "relative"
           }}
         >
           <MapContainer
@@ -490,6 +520,32 @@ const filteredVillages = useMemo(() => {
               reservoirs={reservoirs}
             />
             <UserLocation position={userLocation} />
+
+            {/* Evacuation Route Drawing */}
+            {activeRoute && (
+              <>
+                <Polyline
+                  positions={activeRoute.route_coordinates}
+                  pathOptions={{
+                    color: "#10b981",
+                    weight: 6,
+                    opacity: 0.8,
+                    dashArray: activeRoute.routing_mode === "fallback_direct" ? "10, 10" : undefined
+                  }}
+                />
+                <Marker
+                  position={[activeRoute.refuge.latitude, activeRoute.refuge.longitude]}
+                  icon={refugeIcon}
+                >
+                  <Popup>
+                    <div style={{ minWidth: "150px" }}>
+                      <h4 style={{ color: "#b45309", margin: "0 0 5px 0" }}>🔰 Designated Safe Refuge</h4>
+                      <p style={{ margin: "2px 0", fontSize: "11px" }}><strong>Name:</strong> {activeRoute.refuge.name}</p>
+                    </div>
+                  </Popup>
+                </Marker>
+              </>
+            )}
 
             {/* Active Alert Warning Halos */}
             {alerts
@@ -577,6 +633,24 @@ const filteredVillages = useMemo(() => {
                     <p>
                       <strong>Longitude:</strong> {village.longitude}
                     </p>
+                    
+                    <button
+                      onClick={() => handleCalculateRoute(village.id)}
+                      style={{
+                        width: "100%",
+                        padding: "8px 12px",
+                        background: "#10b981",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        fontWeight: "bold",
+                        marginTop: "12px",
+                        fontSize: "11px"
+                      }}
+                    >
+                      {routeLoading ? "Calculating..." : "🏃 Evacuate Route"}
+                    </button>
                   </div>
                 </Popup>
               </Marker>
@@ -641,6 +715,54 @@ const filteredVillages = useMemo(() => {
             ))}
 
           </MapContainer>
+          
+          {/* Evacuation Route Floating Info Card */}
+          {activeRoute && (
+            <div style={{
+              position: "absolute",
+              top: "30px",
+              right: "30px",
+              zIndex: 1000,
+              background: "rgba(15, 23, 42, 0.95)",
+              color: "white",
+              padding: "20px",
+              borderRadius: "16px",
+              border: "1px solid rgba(51, 65, 85, 0.8)",
+              boxShadow: "0 10px 25px -5px rgba(0,0,0,0.5)",
+              width: "280px",
+              backdropFilter: "blur(8px)",
+              fontSize: "12px"
+            }}>
+              <h4 style={{ margin: "0 0 10px 0", color: "#10b981", fontSize: "14px", fontWeight: "bold", display: "flex", alignItems: "center", gap: "6px" }}>
+                🏃 Evacuation Routing Solver
+              </h4>
+              <hr style={{ border: "0", borderTop: "1px solid #334155", margin: "10px 0" }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <p style={{ margin: 0 }}><strong>Start:</strong> <span style={{ textTransform: "capitalize" }}>{activeRoute.source.name}</span></p>
+                <p style={{ margin: 0 }}><strong>Refuge:</strong> <span style={{ textTransform: "capitalize", color: "#fbbf24", fontWeight: "bold" }}>{activeRoute.refuge.name}</span></p>
+                <p style={{ margin: 0 }}><strong>Distance:</strong> {activeRoute.distance_km} km</p>
+                <p style={{ margin: 0 }}><strong>Driving Time:</strong> {activeRoute.duration_minutes} mins</p>
+                <p style={{ margin: 0 }}><strong>Method:</strong> <span style={{ textTransform: "uppercase", fontWeight: "bold", fontSize: "10px", color: activeRoute.routing_mode === "osrm_streets" ? "#10b981" : "#f59e0b" }}>{activeRoute.routing_mode === "osrm_streets" ? "OSRM Real Road Network" : "Direct Geodesic Line"}</span></p>
+              </div>
+              <button
+                onClick={() => setActiveRoute(null)}
+                style={{
+                  width: "100%",
+                  marginTop: "16px",
+                  background: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "8px",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  transition: "background 0.2s"
+                }}
+              >
+                Clear Evacuation Route
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
