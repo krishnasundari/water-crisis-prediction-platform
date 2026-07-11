@@ -11,6 +11,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import useWebSocket from "../hooks/useWebSocket";
 
 const API =
   window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
@@ -93,72 +94,87 @@ interface Reservoir {
   current_level: number;
 }
 
+interface River {
+  id: number;
+  name: string;
+  river_level: float;
+  danger_level: float;
+  flow_rate: float;
+  trend: string;
+  latitude: number;
+  longitude: number;
+}
+
 interface Prediction {
   id: number;
   village_id: number;
   risk_level: string;
+  risk_score: number;
+  rainfall: number;
+  flood_probability: number;
+  flood_severity: string;
 }
 
 // ============================
-// Auto Zoom Component
+// Map Camera Controller
 // ============================
 
-function FitBounds({
+function MapController({
+  selectedState,
+  selectedDistrict,
+  selectedVillage,
   villages,
   reservoirs,
+  districtCentroids,
 }: {
+  selectedState: string;
+  selectedDistrict: string;
+  selectedVillage: string;
   villages: Village[];
   reservoirs: Reservoir[];
+  districtCentroids: any[];
 }) {
   const map = useMap();
 
   useEffect(() => {
-    const points: [number, number][] = [];
-
-    villages.forEach((v) => {
-      points.push([v.latitude, v.longitude]);
-    });
-
-    reservoirs.forEach((r) => {
-      if (
-        r.latitude !== 0 &&
-        r.longitude !== 0
-      ) {
-        points.push([r.latitude, r.longitude]);
+    // 1. Zoom into specific Village
+    if (selectedVillage !== "all") {
+      const v = villages.find((vil) => vil.name === selectedVillage);
+      if (v) {
+        map.setView([v.latitude, v.longitude], 12, { animate: true });
       }
-    });
-
-    if (points.length) {
-      map.fitBounds(points, {
-        padding: [50, 50],
-      });
+      return;
     }
-  }, [villages, reservoirs, map]);
+
+    // 2. Zoom into specific District
+    if (selectedDistrict !== "all") {
+      const dist = districtCentroids.find((d) => d.name === selectedDistrict);
+      if (dist) {
+        map.setView([dist.latitude, dist.longitude], 9, { animate: true });
+      }
+      return;
+    }
+
+    // 3. Zoom into specific State
+    if (selectedState !== "all") {
+      const points: [number, number][] = villages
+        .filter((v) => v.state.toLowerCase() === selectedState.toLowerCase())
+        .map((v) => [v.latitude, v.longitude]);
+
+      if (points.length > 0) {
+        map.fitBounds(points, { padding: [50, 50], animate: true });
+      }
+      return;
+    }
+
+    // 4. Zoom to National Scope (All points)
+    const points: [number, number][] = villages.map((v) => [v.latitude, v.longitude]);
+    if (points.length > 0) {
+      map.fitBounds(points, { padding: [50, 50], animate: true });
+    }
+  }, [selectedState, selectedDistrict, selectedVillage, villages, map]);
 
   return null;
-}
-function UserLocation({
-  position,
-}: {
-  position: [number, number] | null;
-}) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (position) {
-      map.setView(position, 12);
-    }
-  }, [position, map]);
-
-  if (!position) return null;
-
-  return (
-    <Marker position={position}>
-      <Popup>
-        📍 You are here
-      </Popup>
-    </Marker>
-  );
 }
 
 // ============================
@@ -169,359 +185,302 @@ export default function MapsPage() {
   const [villages, setVillages] = useState<Village[]>([]);
   const [reservoirs, setReservoirs] = useState<Reservoir[]>([]);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [rivers, setRivers] = useState<River[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
+
+  // Hierarchical state scopes
+  const [selectedState, setSelectedState] = useState("all");
+  const [selectedDistrict, setSelectedDistrict] = useState("all");
+  const [selectedVillage, setSelectedVillage] = useState("all");
+
   const [activeRoute, setActiveRoute] = useState<any>(null);
   const [routeLoading, setRouteLoading] = useState(false);
-  const [userLocation, setUserLocation] =
-  useState<[number, number] | null>(null);
-  const [search, setSearch] = useState("");
-const [districtFilter, setDistrictFilter] = useState("All");
-const [riskFilter, setRiskFilter] = useState("All");
+  const [hoveredDistrict, setHoveredDistrict] = useState<any>(null);
+
+  const loadData = async () => {
+    try {
+      const vil = await fetch(`${API}/villages`);
+      setVillages(await vil.json());
+
+      const res = await fetch(`${API}/reservoirs`);
+      setReservoirs(await res.json());
+
+      const pred = await fetch(`${API}/predictions`);
+      setPredictions(await pred.json());
+
+      const riv = await fetch(`${API}/rivers`);
+      setRivers(await riv.json());
+
+      const al = await fetch(`${API}/alerts`);
+      setAlerts(await al.json());
+    } catch (err) {
+      console.error("Error loading map telemetry:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // WebSocket update triggers
+  useWebSocket((event) => {
+    if (event === "sync_complete") {
+      console.log("WebSocket Map: syncing live telemetry hierarchy.");
+      loadData();
+    }
+  });
 
   const handleCalculateRoute = async (villageId: number) => {
     setRouteLoading(true);
     try {
       const res = await fetch(`${API}/evacuation/route?village_id=${villageId}`);
       if (res.ok) {
-        const data = await res.json();
-        setActiveRoute(data);
-      } else {
-        console.error("Failed to fetch evacuation route");
+        setActiveRoute(await res.json());
       }
     } catch (err) {
-      console.error("Evacuation routing error:", err);
+      console.error(err);
     } finally {
       setRouteLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetch(`${API}/villages`)
-      .then((res) => res.json())
-      .then(setVillages)
-      .catch(console.error);
+  // Helper selectors
+  const statesList = useMemo(() => {
+    return Array.from(new Set(villages.map((v) => v.state))).sort();
+  }, [villages]);
 
-    fetch(`${API}/reservoirs`)
-      .then((res) => res.json())
-      .then(setReservoirs)
-      .catch(console.error);
+  const districtsList = useMemo(() => {
+    const filtered = selectedState === "all"
+      ? villages
+      : villages.filter((v) => v.state === selectedState);
+    return Array.from(new Set(filtered.map((v) => v.district))).sort();
+  }, [villages, selectedState]);
 
-    fetch(`${API}/predictions`)
-      .then((res) => res.json())
-      .then(setPredictions)
-      .catch(console.error);
+  const villagesList = useMemo(() => {
+    const filtered = selectedDistrict === "all"
+      ? villages
+      : villages.filter((v) => v.district === selectedDistrict);
+    return filtered.map((v) => v.name).sort();
+  }, [villages, selectedDistrict]);
 
-    fetch(`${API}/alerts`)
-      .then((res) => res.json())
-      .then(setAlerts)
-      .catch(console.error);
-  }, []);  const totalLocations = useMemo(() => {
-    return villages.length + reservoirs.length;
-  }, [villages, reservoirs]);
-  const riskLookup = useMemo(() => {
-  const lookup = new Map<number, string>();
+  // Aggregate District Telemetry
+  const districtCentroids = useMemo(() => {
+    const mapDistricts = new Map<string, Village[]>();
+    villages.forEach((v) => {
+      if (!mapDistricts.has(v.district)) {
+        mapDistricts.set(v.district, []);
+      }
+      mapDistricts.get(v.district)!.push(v);
+    });
 
-  predictions.forEach((prediction) => {
-    lookup.set(
-      prediction.village_id,
-      prediction.risk_level.toLowerCase()
-    );
-  });
+    const list: any[] = [];
+    mapDistricts.forEach((vils, districtName) => {
+      // Find average lat/lon centroid
+      const sumLat = vils.reduce((sum, v) => sum + v.latitude, 0);
+      const sumLon = vils.reduce((sum, v) => sum + v.longitude, 0);
+      const avgLat = sumLat / vils.length;
+      const avgLon = sumLon / vils.length;
 
-  return lookup;
-}, [predictions]);
+      // Group predictions inside this district
+      const villageIds = vils.map((v) => v.id);
+      const distPredictions = predictions.filter((p) => villageIds.includes(p.village_id));
+      
+      const avgRainfall = distPredictions.length > 0
+        ? distPredictions.reduce((sum, p) => sum + (p.rainfall || 0), 0) / distPredictions.length
+        : 0;
 
-const districts = useMemo(() => {
-  return [
-    "All",
-    ...new Set(villages.map((v) => v.district)),
-  ];
-}, [villages]);
+      const avgFloodProbability = distPredictions.length > 0
+        ? distPredictions.reduce((sum, p) => sum + (p.flood_probability || 0), 0) / distPredictions.length
+        : 0;
 
-const filteredVillages = useMemo(() => {
-  return villages.filter((village) => {
-    const searchMatch = village.name
-      .toLowerCase()
-      .includes(search.toLowerCase());
+      // Sourced dams inside district
+      const distDams = reservoirs.filter((r) => r.district === districtName);
+      const avgDamStorage = distDams.length > 0
+        ? distDams.reduce((sum, r) => sum + (r.current_level / r.capacity * 100), 0) / distDams.length
+        : 50.0;
 
-    const districtMatch =
-      districtFilter === "All" ||
-      village.district === districtFilter;
+      // Sourced rivers in district
+      const distRivers = rivers.filter((riv) => {
+        // Simple mapping based on district strings or close proximity
+        return riv.name.toLowerCase().includes(districtName.toLowerCase()) || 
+               districtName === "Gaya" && riv.name === "Ganges" ||
+               districtName === "Pongodu" && riv.name === "Yamuna" ||
+               districtName === "Ponugodu" && riv.name === "Godavari";
+      });
 
-    const risk =
-      riskLookup.get(village.id) ?? "safe";
+      const riversDangerBreach = distRivers.some((riv) => riv.river_level >= riv.danger_level);
 
-    const riskMatch =
-      riskFilter === "All" ||
-      risk === riskFilter.toLowerCase();
+      // Active Alerts count
+      const activeAlerts = alerts.filter((a) => !a.is_read && villageIds.includes(a.village_id || -1));
+      const hasCriticalAlert = activeAlerts.some((a) => a.severity === "critical");
 
-    return (
-      searchMatch &&
-      districtMatch &&
-      riskMatch
-    );
-  });
-}, [
-  villages,
-  search,
-  districtFilter,
-  riskFilter,
-  riskLookup,
-]);
+      // Compounding Color Code logic
+      let color = "#10b981"; // Green (Safe)
+      let status = "Safe";
+      if (hasCriticalAlert || avgFloodProbability > 70 || riversDangerBreach) {
+        color = "#ef4444"; // Red (Critical)
+        status = "Critical Warning";
+      } else if (avgFloodProbability > 45 || activeAlerts.some((a) => a.severity === "high")) {
+        color = "#f97316"; // Orange (High)
+        status = "High Threat";
+      } else if (avgFloodProbability > 25 || activeAlerts.some((a) => a.severity === "medium")) {
+        color = "#eab308"; // Yellow (Moderate)
+        status = "Moderate Warning";
+      }
 
+      list.push({
+        name: districtName,
+        state: vils[0].state,
+        latitude: avgLat,
+        longitude: avgLon,
+        avgRainfall: round(avgRainfall, 1),
+        avgFloodProbability: round(avgFloodProbability, 1),
+        avgDamStorage: round(avgDamStorage, 1),
+        damsCount: distDams.length,
+        riversCount: distRivers.length,
+        activeAlertsCount: activeAlerts.length,
+        riversDangerBreach,
+        color,
+        status,
+      });
+    });
 
-  
+    return list;
+  }, [villages, predictions, reservoirs, rivers, alerts]);
 
-  const getVillageIcon = (villageId: number) => {
-    const risk = riskLookup.get(villageId);
+  // Selected scope district details HUD solver
+  const activeDistrictSummary = useMemo(() => {
+    if (selectedDistrict === "all") return null;
+    return districtCentroids.find((d) => d.name === selectedDistrict) || null;
+  }, [selectedDistrict, districtCentroids]);
 
-    switch (risk) {
-      case "high":
-        return highVillageIcon;
-
-      case "moderate":
-        return moderateVillageIcon;
-
-      default:
-        return safeVillageIcon;
-    }
+  const round = (val: number, decimals: number) => {
+    return Number(val.toFixed(decimals));
   };
 
-  const getRiskColor = (villageId: number) => {
-    const risk = riskLookup.get(villageId);
-
-    switch (risk) {
-      case "high":
-        return "#dc2626";
-
-      case "moderate":
-        return "#f59e0b";
-
-      default:
-        return "#16a34a";
-    }
+  const getVillageRiskColor = (id: number) => {
+    const latest = predictions.find((p) => p.village_id === id);
+    if (!latest) return "#10b981"; // Green
+    const lvl = latest.risk_level.toLowerCase();
+    if (lvl === "high") return "#ef4444"; // Red
+    if (lvl === "moderate") return "#eab308"; // Yellow
+    return "#10b981"; // Green
   };
-  const locateMe = () => {
-  if (!navigator.geolocation) {
-    alert("Geolocation is not supported.");
-    return;
-  }
 
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      setUserLocation([
-        position.coords.latitude,
-        position.coords.longitude,
-      ]);
-    },
-    () => {
-      alert("Unable to fetch your location.");
-    }
-  );
-};
+  const getVillageIcon = (id: number) => {
+    const latest = predictions.find((p) => p.village_id === id);
+    if (!latest) return safeVillageIcon;
+    const lvl = latest.risk_level.toLowerCase();
+    if (lvl === "high") return highVillageIcon;
+    if (lvl === "moderate") return moderateVillageIcon;
+    return safeVillageIcon;
+  };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        minHeight: "100vh",
-        background: "#f5f7fa",
-      }}
-    >
+    <div className="flex h-screen bg-slate-900 text-slate-100 overflow-hidden">
       <Sidebar />
 
-      <div
-        style={{
-          flex: 1,
-          padding: "30px",
-        }}
-      >
-        <h1
-          style={{
-            fontSize: "32px",
-            fontWeight: 700,
-            marginBottom: "24px",
-          }}
-        >
-          🌍 Water Crisis Monitoring Map
-        </h1>
-        <div
-  style={{
-    marginBottom: "20px",
-  }}
->
-  <button
-    onClick={locateMe}
-    style={{
-      background: "#1976d2",
-      color: "white",
-      border: "none",
-      padding: "10px 18px",
-      borderRadius: "8px",
-      cursor: "pointer",
-      fontWeight: "bold",
-    }}
-  >
-    📍 Locate Me
-  </button>
-</div>
-
-        {/* Statistics */}
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3,1fr)",
-            gap: "20px",
-            marginBottom: "24px",
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              padding: "20px",
-              borderRadius: "12px",
-              boxShadow: "0 2px 8px rgba(0,0,0,.08)",
-            }}
-          >
-            <h3>🏘 Villages</h3>
-            <h1>{filteredVillages.length}</h1>
-          </div>
-
-          <div
-            style={{
-              background: "#fff",
-              padding: "20px",
-              borderRadius: "12px",
-              boxShadow: "0 2px 8px rgba(0,0,0,.08)",
-            }}
-          >
-            <h3>💧 Reservoirs</h3>
-            <h1>{reservoirs.length}</h1>
-          </div>
-
-          <div
-            style={{
-              background: "#fff",
-              padding: "20px",
-              borderRadius: "12px",
-              boxShadow: "0 2px 8px rgba(0,0,0,.08)",
-            }}
-          >
-            <h3>📍 Total Locations</h3>
-            <h1>{totalLocations}</h1>
-          </div>
-        </div>
-        <div
-  style={{
-    display: "flex",
-    gap: "16px",
-    marginBottom: "20px",
-    flexWrap: "wrap",
-  }}
->
-  <input
-    type="text"
-    placeholder="Search village..."
-    value={search}
-    onChange={(e) => setSearch(e.target.value)}
-    style={{
-      padding: "10px",
-      borderRadius: "8px",
-      border: "1px solid #ddd",
-      width: "220px",
-    }}
-  />
-
-  <select
-    value={districtFilter}
-    onChange={(e) =>
-      setDistrictFilter(e.target.value)
-    }
-    style={{
-      padding: "10px",
-      borderRadius: "8px",
-    }}
-  >
-    {districts.map((district) => (
-      <option
-        key={district}
-        value={district}
-      >
-        {district}
-      </option>
-    ))}
-  </select>
-
-  <select
-    value={riskFilter}
-    onChange={(e) =>
-      setRiskFilter(e.target.value)
-    }
-    style={{
-      padding: "10px",
-      borderRadius: "8px",
-    }}
-  >
-    <option>All</option>
-    <option>Safe</option>
-    <option>Moderate</option>
-    <option>High</option>
-  </select>
-</div>
+      <div className="flex-1 flex flex-col overflow-hidden relative">
         
+        {/* HIERARCHICAL SCOPE HEADER HUD */}
+        <header className="bg-slate-800/90 border-b border-slate-700/60 p-4 sticky top-0 z-40 backdrop-blur-md flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <span className="text-[10px] uppercase tracking-widest text-indigo-400 font-bold font-mono">
+              India Hydrological Viewfinder
+            </span>
+            <div className="text-sm font-bold flex items-center gap-1.5 mt-0.5">
+              <span>🇮🇳 India</span>
+              <span className="text-slate-500">/</span>
+              <span className={selectedState !== "all" ? "text-indigo-400" : "text-slate-400"}>
+                {selectedState === "all" ? "All States" : selectedState}
+              </span>
+              {selectedDistrict !== "all" && (
+                <>
+                  <span className="text-slate-500">/</span>
+                  <span className="text-indigo-400">{selectedDistrict} District</span>
+                </>
+              )}
+              {selectedVillage !== "all" && (
+                <>
+                  <span className="text-slate-500">/</span>
+                  <span className="text-cyan-400">{selectedVillage}</span>
+                </>
+              )}
+            </div>
+          </div>
 
-        {/* Legend */}
+          {/* SCOPE DROPDOWNS SELECTORS */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {/* STATE */}
+            <select
+              value={selectedState}
+              onChange={(e) => {
+                setSelectedState(e.target.value);
+                setSelectedDistrict("all");
+                setSelectedVillage("all");
+              }}
+              className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="all">All States</option>
+              {statesList.map((st) => (
+                <option key={st} value={st}>{st}</option>
+              ))}
+            </select>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "24px",
-            background: "#fff",
-            padding: "16px 20px",
-            borderRadius: "12px",
-            marginBottom: "20px",
-            boxShadow: "0 2px 8px rgba(0,0,0,.08)",
-          }}
-        >
-          <div>🟢 <strong>Safe</strong></div>
-          <div>🟡 <strong>Moderate</strong></div>
-          <div>🔴 <strong>High Risk</strong></div>
-          <div>🔵 <strong>Reservoir</strong></div>
-        </div>
+            {/* DISTRICT */}
+            <select
+              value={selectedDistrict}
+              onChange={(e) => {
+                setSelectedDistrict(e.target.value);
+                setSelectedVillage("all");
+              }}
+              className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              disabled={selectedState === "all"}
+            >
+              <option value="all">All Districts</option>
+              {districtsList.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
 
-        {/* Map */}
+            {/* VILLAGE */}
+            <select
+              value={selectedVillage}
+              onChange={(e) => setSelectedVillage(e.target.value)}
+              className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              disabled={selectedDistrict === "all"}
+            >
+              <option value="all">All Villages</option>
+              {villagesList.map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </div>
+        </header>
 
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: "12px",
-            padding: "15px",
-            boxShadow: "0 2px 10px rgba(0,0,0,.1)",
-            position: "relative"
-          }}
-        >
+        {/* MAP CONTAINER MAIN LAYER */}
+        <div className="flex-1 relative">
+          
           <MapContainer
             center={[22.5, 79]}
             zoom={5}
-            style={{
-              width: "100%",
-              height: "650px",
-              borderRadius: "12px",
-            }}
+            style={{ width: "100%", height: "100%", zIndex: 10 }}
           >
             <TileLayer
               attribution="© OpenStreetMap contributors"
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            <FitBounds
+            <MapController
+              selectedState={selectedState}
+              selectedDistrict={selectedDistrict}
+              selectedVillage={selectedVillage}
               villages={villages}
               reservoirs={reservoirs}
+              districtCentroids={districtCentroids}
             />
-            <UserLocation position={userLocation} />
 
-            {/* Evacuation Route Drawing */}
+            {/* Render Evacuation Route */}
             {activeRoute && (
               <>
                 <Polyline
@@ -530,7 +489,7 @@ const filteredVillages = useMemo(() => {
                     color: "#10b981",
                     weight: 6,
                     opacity: 0.8,
-                    dashArray: activeRoute.routing_mode === "fallback_direct" ? "10, 10" : undefined
+                    dashArray: activeRoute.routing_mode === "fallback_direct" ? "10, 10" : undefined,
                   }}
                 />
                 <Marker
@@ -538,7 +497,7 @@ const filteredVillages = useMemo(() => {
                   icon={refugeIcon}
                 >
                   <Popup>
-                    <div style={{ minWidth: "150px" }}>
+                    <div style={{ minWidth: "150px" }} className="text-slate-900">
                       <h4 style={{ color: "#b45309", margin: "0 0 5px 0" }}>🔰 Designated Safe Refuge</h4>
                       <p style={{ margin: "2px 0", fontSize: "11px" }}><strong>Name:</strong> {activeRoute.refuge.name}</p>
                     </div>
@@ -547,225 +506,231 @@ const filteredVillages = useMemo(() => {
               </>
             )}
 
-            {/* Active Alert Warning Halos */}
-            {alerts
-              .filter((a: any) => !a.is_read && a.village_id)
-              .map((alert: any) => {
-                const village = villages.find((v: any) => v.id === alert.village_id);
-                if (!village) return null;
-                return (
+            {/* 1. DISTRICT CENTROIDS OVERLAYS (Shown when selectedDistrict is 'all') */}
+            {selectedDistrict === "all" &&
+              districtCentroids
+                .filter((d) => selectedState === "all" || d.state === selectedState)
+                .map((dist) => (
                   <Circle
-                    key={`alert-halo-${alert.id}`}
-                    center={[village.latitude, village.longitude]}
+                    key={`district-centroid-${dist.name}`}
+                    center={[dist.latitude, dist.longitude]}
+                    radius={30000}
                     pathOptions={{
-                      color: alert.severity === "critical" ? "#ef4444" : "#f97316",
-                      fillColor: alert.severity === "critical" ? "#ef4444" : "#f97316",
-                      fillOpacity: 0.15,
-                      weight: 1.5,
-                      dashArray: "5, 5"
+                      color: dist.color,
+                      fillColor: dist.color,
+                      fillOpacity: 0.5,
+                      weight: 2,
                     }}
-                    radius={18000}
-                  />
-                );
-              })}
+                    eventHandlers={{
+                      click: () => {
+                        setSelectedState(dist.state);
+                        setSelectedDistrict(dist.name);
+                      },
+                      mouseover: () => setHoveredDistrict(dist),
+                      mouseout: () => setHoveredDistrict(null),
+                    }}
+                  >
+                    <Popup>
+                      <div className="text-slate-900 text-xs min-w-[200px] space-y-1">
+                        <h3 className="font-black text-sm uppercase" style={{ color: dist.color }}>
+                          📍 {dist.name} District
+                        </h3>
+                        <p><strong>State:</strong> {dist.state}</p>
+                        <p><strong>Severity:</strong> <span style={{ color: dist.color, fontWeight: "bold" }}>{dist.status}</span></p>
+                        <hr className="my-1" />
+                        <p><strong>Avg Flood Probability:</strong> {dist.avgFloodProbability}%</p>
+                        <p><strong>Active Alert Alarms:</strong> {dist.activeAlertsCount}</p>
+                        <p><strong>Click to zoom and view individual villages</strong></p>
+                      </div>
+                    </Popup>
+                  </Circle>
+                ))}
 
-            {/* Village Markers */}
+            {/* 2. SPECIFIC VILLAGE MARKERS (Shown when selectedDistrict is specific) */}
+            {selectedDistrict !== "all" &&
+              villages
+                .filter((v) => v.district === selectedDistrict)
+                .map((village) => (
+                  <Marker
+                    key={`village-marker-${village.id}`}
+                    position={[village.latitude, village.longitude]}
+                    icon={getVillageIcon(village.id)}
+                  >
+                    <Popup>
+                      <div className="text-slate-900 text-xs min-w-[220px] space-y-1.5">
+                        <h3 style={{ color: getVillageRiskColor(village.id), margin: 0 }} className="font-bold text-sm">
+                          🏘️ {village.name}
+                        </h3>
+                        <hr />
+                        <p><strong>Population:</strong> {village.population.toLocaleString()}</p>
+                        <p><strong>Water Source:</strong> {village.water_source}</p>
+                        <p><strong>Drought Risk:</strong> <span style={{ color: getVillageRiskColor(village.id), fontWeight: "bold" }}>{(riskLookup.get(village.id) || "safe").toUpperCase()}</span></p>
+                        
+                        <button
+                          onClick={() => handleCalculateRoute(village.id)}
+                          style={{
+                            width: "100%",
+                            padding: "6px",
+                            background: "#10b981",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                            marginTop: "8px",
+                            fontSize: "10px",
+                          }}
+                        >
+                          {routeLoading ? "Calculating..." : "🏃 Evacuate Route"}
+                        </button>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
 
-            {filteredVillages.map((village) => (
-              <Marker
-                key={village.id}
-                position={[
-                  village.latitude,
-                  village.longitude,
-                ]}
-                icon={getVillageIcon(village.id)}
-              >
-                <Popup>
-                  <div style={{ minWidth: "220px" }}>
-                    <h3
-                      style={{
-                        color: getRiskColor(village.id),
-                        marginBottom: "10px",
+            {/* 3. ACTIVE ALERTS WARNING HALOS */}
+            {selectedDistrict !== "all" &&
+              alerts
+                .filter((a: any) => !a.is_read && a.village_id)
+                .map((alert: any) => {
+                  const village = villages.find((v: any) => v.id === alert.village_id);
+                  if (!village || village.district !== selectedDistrict) return null;
+                  return (
+                    <Circle
+                      key={`alert-halo-${alert.id}`}
+                      center={[village.latitude, village.longitude]}
+                      pathOptions={{
+                        color: alert.severity === "critical" ? "#ef4444" : "#f97316",
+                        fillColor: alert.severity === "critical" ? "#ef4444" : "#f97316",
+                        fillOpacity: 0.15,
+                        weight: 1.5,
+                        dashArray: "5, 5",
                       }}
-                    >
-                      🏘 {village.name}
-                    </h3>
+                      radius={18000}
+                    />
+                  );
+                })}
 
-                    <hr />                    <p>
-                      <strong>District:</strong> {village.district}
-                    </p>
-
-                    <p>
-                      <strong>State:</strong> {village.state}
-                    </p>
-
-                    <p>
-                      <strong>Population:</strong> {village.population}
-                    </p>
-
-                    <p>
-                      <strong>Water Source:</strong> {village.water_source}
-                    </p>
-
-                    <p>
-                      <strong>Reservoir Dependency:</strong>{" "}
-                      {village.reservoir_dependency}%
-                    </p>
-
-                    <p>
-                      <strong>Risk Level:</strong>{" "}
-                      <span
-                        style={{
-                          color: getRiskColor(village.id),
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {(
-                          riskLookup.get(village.id) ?? "safe"
-                        ).toUpperCase()}
-                      </span>
-                    </p>
-
-                    <p>
-                      <strong>Latitude:</strong> {village.latitude}
-                    </p>
-
-                    <p>
-                      <strong>Longitude:</strong> {village.longitude}
-                    </p>
-                    
-                    <button
-                      onClick={() => handleCalculateRoute(village.id)}
-                      style={{
-                        width: "100%",
-                        padding: "8px 12px",
-                        background: "#10b981",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "8px",
-                        cursor: "pointer",
-                        fontWeight: "bold",
-                        marginTop: "12px",
-                        fontSize: "11px"
-                      }}
-                    >
-                      {routeLoading ? "Calculating..." : "🏃 Evacuate Route"}
-                    </button>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-
-            {/* Reservoir Markers */}
-
-            {reservoirs.map((reservoir) => (
-              <Marker
-                key={reservoir.id}
-                position={[
-                  reservoir.latitude,
-                  reservoir.longitude,
-                ]}
-                icon={reservoirIcon}
-              >
-                <Popup>
-                  <div style={{ minWidth: "220px" }}>
-                    <h3
-                      style={{
-                        color: "#2563eb",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      💧 {reservoir.name}
-                    </h3>
-
-                    <hr />
-
-                    <p>
-                      <strong>District:</strong>{" "}
-                      {reservoir.district}
-                    </p>
-
-                    <p>
-                      <strong>State:</strong>{" "}
-                      {reservoir.state}
-                    </p>
-
-                    <p>
-                      <strong>Capacity:</strong>{" "}
-                      {reservoir.capacity}
-                    </p>
-
-                    <p>
-                      <strong>Current Level:</strong>{" "}
-                      {reservoir.current_level}
-                    </p>
-
-                    <p>
-                      <strong>Latitude:</strong>{" "}
-                      {reservoir.latitude}
-                    </p>
-
-                    <p>
-                      <strong>Longitude:</strong>{" "}
-                      {reservoir.longitude}
-                    </p>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
+            {/* 4. RESERVOIR/DAM MARKERS (Shown inside selected district) */}
+            {selectedDistrict !== "all" &&
+              reservoirs
+                .filter((r) => r.district === selectedDistrict)
+                .map((reservoir) => (
+                  <Marker
+                    key={`res-marker-${reservoir.id}`}
+                    position={[reservoir.latitude, reservoir.longitude]}
+                    icon={reservoirIcon}
+                  >
+                    <Popup>
+                      <div className="text-slate-900 text-xs min-w-[200px] space-y-1">
+                        <h4 className="font-bold text-blue-600">💧 {reservoir.name} Reservoir</h4>
+                        <p><strong>Capacity:</strong> {reservoir.capacity.toLocaleString()} m3</p>
+                        <p><strong>Current Level:</strong> {reservoir.current_level.toLocaleString()} m</p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
 
           </MapContainer>
-          
-          {/* Evacuation Route Floating Info Card */}
+
+          {/* FLOATING HOVER DISTRICT SUMMARY CARD */}
+          {hoveredDistrict && (
+            <div className="absolute bottom-5 left-5 z-40 bg-slate-950/90 border border-slate-700/80 rounded-2xl p-4 w-72 backdrop-blur-md shadow-2xl space-y-2 pointer-events-none text-xs">
+              <h3 className="font-black text-sm uppercase flex items-center justify-between">
+                <span>{hoveredDistrict.name} District</span>
+                <span className="px-2 py-0.5 rounded text-[8px] font-black" style={{ background: `${hoveredDistrict.color}20`, color: hoveredDistrict.color, border: `1px solid ${hoveredDistrict.color}30` }}>
+                  {hoveredDistrict.status}
+                </span>
+              </h3>
+              <hr className="border-slate-800" />
+              <p><strong>State:</strong> {hoveredDistrict.state}</p>
+              <p><strong>Avg Rainfall:</strong> {hoveredDistrict.avgRainfall} mm</p>
+              <p><strong>AI Flood Risk:</strong> {hoveredDistrict.avgFloodProbability}%</p>
+              <p><strong>Dam Avg Storage:</strong> {hoveredDistrict.avgDamStorage}% ({hoveredDistrict.damsCount} active)</p>
+              <p><strong>Rivers Danger:</strong> {hoveredDistrict.riversDangerBreach ? "🔴 Danger Breach" : "🟢 Stable"}</p>
+              <p><strong>Active Alert Alarms:</strong> {hoveredDistrict.activeAlertsCount}</p>
+            </div>
+          )}
+
+          {/* FLOATING DISTRICT HUD CARD (Shown when a district is selected) */}
+          {activeDistrictSummary && (
+            <div className="absolute top-5 right-5 z-40 bg-slate-950/95 border border-slate-700/80 rounded-3xl p-5 w-80 backdrop-blur-md shadow-2xl space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase tracking-widest text-slate-400 font-mono">Selected Scope</span>
+                  <h3 className="font-black text-sm uppercase text-white mt-0.5">{activeDistrictSummary.name} Summary</h3>
+                </div>
+                <span className="px-2.5 py-1 rounded-xl text-[9px] font-black uppercase" style={{ background: `${activeDistrictSummary.color}25`, color: activeDistrictSummary.color, border: `1px solid ${activeDistrictSummary.color}35` }}>
+                  {activeDistrictSummary.status}
+                </span>
+              </div>
+              <hr className="border-slate-800" />
+
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Average Rainfall:</span>
+                  <span className="font-bold text-teal-400">{activeDistrictSummary.avgRainfall} mm</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">AI Flood Risk:</span>
+                  <span className="font-bold text-cyan-400">{activeDistrictSummary.avgFloodProbability}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Dam Reserves:</span>
+                  <span className="font-bold text-blue-400">{activeDistrictSummary.avgDamStorage}% ({activeDistrictSummary.damsCount} dams)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Rivers Status:</span>
+                  <span className={`font-bold ${activeDistrictSummary.riversDangerBreach ? "text-red-400" : "text-green-400"}`}>
+                    {activeDistrictSummary.riversDangerBreach ? "BREACH ALERT" : "STABLE OUTFLOW"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Active Alert Logs:</span>
+                  <span className="font-bold text-red-400">{activeDistrictSummary.activeAlertsCount} alerts</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    setSelectedDistrict("all");
+                    setSelectedVillage("all");
+                  }}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl py-2 font-bold transition text-center"
+                >
+                  India Map
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* EVACUATION ROUTE FLOATING CARD */}
           {activeRoute && (
-            <div style={{
-              position: "absolute",
-              top: "30px",
-              right: "30px",
-              zIndex: 1000,
-              background: "rgba(15, 23, 42, 0.95)",
-              color: "white",
-              padding: "20px",
-              borderRadius: "16px",
-              border: "1px solid rgba(51, 65, 85, 0.8)",
-              boxShadow: "0 10px 25px -5px rgba(0,0,0,0.5)",
-              width: "280px",
-              backdropFilter: "blur(8px)",
-              fontSize: "12px"
-            }}>
-              <h4 style={{ margin: "0 0 10px 0", color: "#10b981", fontSize: "14px", fontWeight: "bold", display: "flex", alignItems: "center", gap: "6px" }}>
+            <div className="absolute bottom-5 right-5 z-40 bg-slate-950/95 border border-slate-700/80 rounded-3xl p-5 w-80 backdrop-blur-md shadow-2xl space-y-3 text-xs">
+              <h4 className="text-indigo-400 font-black text-sm uppercase flex items-center gap-1.5">
                 🏃 Evacuation Routing Solver
               </h4>
-              <hr style={{ border: "0", borderTop: "1px solid #334155", margin: "10px 0" }} />
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <p style={{ margin: 0 }}><strong>Start:</strong> <span style={{ textTransform: "capitalize" }}>{activeRoute.source.name}</span></p>
-                <p style={{ margin: 0 }}><strong>Refuge:</strong> <span style={{ textTransform: "capitalize", color: "#fbbf24", fontWeight: "bold" }}>{activeRoute.refuge.name}</span></p>
-                <p style={{ margin: 0 }}><strong>Distance:</strong> {activeRoute.distance_km} km</p>
-                <p style={{ margin: 0 }}><strong>Driving Time:</strong> {activeRoute.duration_minutes} mins</p>
-                <p style={{ margin: 0 }}><strong>Method:</strong> <span style={{ textTransform: "uppercase", fontWeight: "bold", fontSize: "10px", color: activeRoute.routing_mode === "osrm_streets" ? "#10b981" : "#f59e0b" }}>{activeRoute.routing_mode === "osrm_streets" ? "OSRM Real Road Network" : "Direct Geodesic Line"}</span></p>
+              <hr className="border-slate-800" />
+              <div className="space-y-1.5">
+                <p><strong>Source:</strong> <span className="capitalize">{activeRoute.source.name}</span></p>
+                <p><strong>Safe Refuge Haven:</strong> <span className="capitalize text-amber-400 font-bold">{activeRoute.refuge.name}</span></p>
+                <p><strong>Distance:</strong> {activeRoute.distance_km} km</p>
+                <p><strong>Est. Drive Time:</strong> {activeRoute.duration_minutes} mins</p>
+                <p><strong>Method:</strong> <span className="uppercase font-bold text-teal-400 text-[10px]">{activeRoute.routing_mode}</span></p>
               </div>
               <button
                 onClick={() => setActiveRoute(null)}
-                style={{
-                  width: "100%",
-                  marginTop: "16px",
-                  background: "#ef4444",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  padding: "8px",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                  transition: "background 0.2s"
-                }}
+                className="w-full bg-red-600 hover:bg-red-500 text-white rounded-xl py-2 font-bold transition"
               >
-                Clear Evacuation Route
+                Clear Route
               </button>
             </div>
           )}
+
         </div>
+
       </div>
     </div>
   );
 }
-  
