@@ -16,7 +16,7 @@ import useWebSocket from "../hooks/useWebSocket";
 const API =
   window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
     ? "http://localhost:8000/api/v1"
-    : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
+    : import.meta.env.VITE_API_URL || "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
 
 // ============================
 // Marker Icons
