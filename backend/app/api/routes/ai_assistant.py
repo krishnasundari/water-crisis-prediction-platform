@@ -50,11 +50,19 @@ def chat(
             "and promote rainwater harvesting."
         )
 
-    elif "alert" in user_message:
-        assistant_response = (
-            f"There are {active_alerts} active alert(s). "
-            "Authorities should review and respond to unresolved alerts."
-        )
+    elif "alert" in user_message or "threat" in user_message or "warning" in user_message:
+        recent = db.query(Alert).filter(Alert.is_read == False).order_by(Alert.created_at.desc()).limit(5).all()
+        if recent:
+            msg_list = "\n".join([f"• [{a.severity.upper()} - {a.alert_type}] {a.message}" for a in recent])
+            assistant_response = (
+                f"There are currently {active_alerts} active alert(s) in the system:\n\n{msg_list}\n\n"
+                "Recommended response checklist:\n"
+                "1. Verify gauge values with site engineers.\n"
+                "2. Dispatch emergency warnings to downstream villages.\n"
+                "3. Coordinate with district disaster authorities."
+            )
+        else:
+            assistant_response = "All systems green! There are no unresolved active alerts in the database."
 
     elif "village" in user_message:
         assistant_response = (

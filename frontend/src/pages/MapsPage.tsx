@@ -5,6 +5,7 @@ import {
   TileLayer,
   Marker,
   Popup,
+  Circle,
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
@@ -158,6 +159,7 @@ export default function MapsPage() {
   const [villages, setVillages] = useState<Village[]>([]);
   const [reservoirs, setReservoirs] = useState<Reservoir[]>([]);
   const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [alerts, setAlerts] = useState<any[]>([]);
   const [userLocation, setUserLocation] =
   useState<[number, number] | null>(null);
   const [search, setSearch] = useState("");
@@ -178,6 +180,11 @@ const [riskFilter, setRiskFilter] = useState("All");
     fetch(`${API}/predictions`)
       .then((res) => res.json())
       .then(setPredictions)
+      .catch(console.error);
+
+    fetch(`${API}/alerts`)
+      .then((res) => res.json())
+      .then(setAlerts)
       .catch(console.error);
   }, []);  const totalLocations = useMemo(() => {
     return villages.length + reservoirs.length;
@@ -483,6 +490,28 @@ const filteredVillages = useMemo(() => {
               reservoirs={reservoirs}
             />
             <UserLocation position={userLocation} />
+
+            {/* Active Alert Warning Halos */}
+            {alerts
+              .filter((a: any) => !a.is_read && a.village_id)
+              .map((alert: any) => {
+                const village = villages.find((v: any) => v.id === alert.village_id);
+                if (!village) return null;
+                return (
+                  <Circle
+                    key={`alert-halo-${alert.id}`}
+                    center={[village.latitude, village.longitude]}
+                    pathOptions={{
+                      color: alert.severity === "critical" ? "#ef4444" : "#f97316",
+                      fillColor: alert.severity === "critical" ? "#ef4444" : "#f97316",
+                      fillOpacity: 0.15,
+                      weight: 1.5,
+                      dashArray: "5, 5"
+                    }}
+                    radius={18000}
+                  />
+                );
+              })}
 
             {/* Village Markers */}
 

@@ -235,21 +235,50 @@ async def sync_all_data(db: Session):
         )
         db.add(new_pred)
         
-        # Trigger Alert Check
-        if result["risk_level"] in ["High", "Moderate"]:
+        # ----------------------------------------------------
+        # Intelligent Alert Engine Rules Evaluation
+        # ----------------------------------------------------
+        # Rule A: Compound Flood Alert (Rain + Dam + River Level)
+        if rain > 15.0 and dam_pct > 85.0 and riv_lvl >= danger_lvl:
+            alert_msg = f"🚨 CRITICAL FLASH FLOOD WARNING: {v.name} is under immediate threat! Regional rainfall is heavy ({rain}mm), nearest reservoir capacity is high ({round(dam_pct,1)}%), and the local river has breached danger levels ({riv_lvl}m / {danger_lvl}m)."
+            alert_type = "flood"
+            severity = "critical"
+        elif rain > 15.0 and dam_pct > 85.0:
+            alert_msg = f"⚠️ FLOOD THREAT WARNING: {v.name} regional indicators show active warnings. Heavy rainfall ({rain}mm) and saturated reservoir storage capacity ({round(dam_pct,1)}%) detected."
+            alert_type = "flood"
+            severity = "high"
+        elif riv_lvl >= danger_lvl:
+            alert_msg = f"🌊 RIVER OVERFLOW WARNING: Local river has crossed critical danger limits near {v.name} ({riv_lvl}m / {danger_lvl}m). Nearby lowlands face runoff pooling."
+            alert_type = "flood"
+            severity = "medium"
+            
+        # Rule B: Compound Drought/Scarcity Alert
+        elif rain == 0.0 and dam_pct < 25.0 and new_depth > 12.0:
+            alert_msg = f"🏜️ CRITICAL WATER CRISIS: {v.name} is facing compounding scarcity alerts. Nearest reservoir is depleted ({round(dam_pct,1)}%) and regional aquifer depth is low ({round(new_depth,2)}m)."
+            alert_type = "drought"
+            severity = "critical"
+        elif result["risk_level"] in ["High", "Moderate"]:
             alert_msg = f"Critical Scarcity Risk: {v.name} is classified as {result['risk_level']} warning level due to low dam capacity ({round(dam_pct,1)}%) and falling aquifers ({round(new_depth, 2)}m)."
-            # Check if this alert has already been raised today
+            alert_type = "drought"
+            severity = "high" if result["risk_level"] == "High" else "medium"
+        else:
+            alert_msg = None
+            alert_type = None
+            severity = None
+            
+        if alert_msg:
+            # Check if this alert has already been raised today for this village
             today_alert = db.query(Alert).filter(
                 Alert.village_id == v.id,
-                Alert.alert_type == "drought",
+                Alert.alert_type == alert_type,
                 Alert.created_at >= datetime.now().replace(hour=0, minute=0, second=0)
             ).first()
             
             if not today_alert:
                 new_alert = Alert(
                     village_id=v.id,
-                    alert_type="drought",
-                    severity="high" if result["risk_level"] == "High" else "medium",
+                    alert_type=alert_type,
+                    severity=severity,
                     message=alert_msg,
                     is_read=False,
                     created_at=datetime.now()

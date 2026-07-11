@@ -26,6 +26,7 @@ export default function DashboardPage() {
     active_alerts: 0,
     average_risk_score: 0,
   });
+  const [alerts, setAlerts] = useState<any[]>([]);
 
   const getBaseURL = () => {
     return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
@@ -33,25 +34,30 @@ export default function DashboardPage() {
       : "https://water-crisis-prediction-platform-1.onrender.com/api/v1";
   };
 
-  const loadStats = () => {
+  const loadData = () => {
     fetch(`${getBaseURL()}/dashboard/stats`)
       .then((res) => res.json())
+      .then((data) => setStats(data))
+      .catch((err) => console.error("Error fetching dashboard stats:", err));
+
+    fetch(`${getBaseURL()}/alerts/`)
+      .then((res) => res.json())
       .then((data) => {
-        setStats(data);
+        // Show last 5 active alerts
+        const active = data.filter((a: any) => !a.is_read).slice(0, 5);
+        setAlerts(active);
       })
-      .catch((err) => {
-        console.error("Error fetching dashboard stats:", err);
-      });
+      .catch((err) => console.error("Error fetching dashboard alerts:", err));
   };
 
   useEffect(() => {
-    loadStats();
+    loadData();
   }, []);
 
   useWebSocket((event) => {
     if (event === "sync_complete") {
-      console.log("Telemetry sync complete. Reloading dashboard stats.");
-      loadStats();
+      console.log("Telemetry sync complete. Reloading dashboard data.");
+      loadData();
     }
   });
 
@@ -305,18 +311,57 @@ cursor: "pointer",
             boxShadow: "0 3px 10px rgba(0,0,0,0.12)",
           }}
         >
-          <h2>🚨 Recent Alerts</h2>
+          <h2>🚨 Active Operations Alerts Feed</h2>
 
-          {stats.active_alerts === 0 ? (
-            <p style={{ color: "green" }}>
-              ✅ No active alerts. Water resources are currently stable.
+          {alerts.length === 0 ? (
+            <p style={{ color: "green", fontSize: "14px", fontWeight: "bold" }}>
+              ✅ All systems stable. No active alerts or breaches logged.
             </p>
           ) : (
-            <ul>
-              <li>
-  ⚠️ {stats.active_alerts} active water crisis alerts detected.
-</li>
-            </ul>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "15px" }}>
+              {alerts.map((a) => (
+                <div
+                  key={a.id}
+                  style={{
+                    padding: "12px 16px",
+                    borderRadius: "8px",
+                    fontSize: "13px",
+                    background:
+                      a.severity === "critical"
+                        ? "#fef2f2"
+                        : a.severity === "high"
+                        ? "#fff7ed"
+                        : "#fef8e6",
+                    borderLeft: `5px solid ${
+                      a.severity === "critical"
+                        ? "#ef4444"
+                        : a.severity === "high"
+                        ? "#f97316"
+                        : "#eab308"
+                    }`,
+                    color: "#1e293b",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <span style={{
+                      color:
+                        a.severity === "critical"
+                          ? "#dc2626"
+                          : a.severity === "high"
+                          ? "#ea580c"
+                          : "#ca8a04"
+                    }}>
+                      [{a.severity}] {a.alert_type}
+                    </span>
+                    <span style={{ color: "#64748b" }}>
+                      {new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <div style={{ marginTop: "5px", lineHeight: "18px" }}>{a.message}</div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
