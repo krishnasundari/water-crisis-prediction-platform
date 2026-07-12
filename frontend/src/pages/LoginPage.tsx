@@ -206,7 +206,7 @@ export default function LoginPage() {
       <div 
         className="relative w-full md:w-[55%] h-1/2 md:h-full flex flex-col justify-between p-10 md:p-14 overflow-hidden shrink-0 border-r border-sky-950/20"
         style={{
-          backgroundImage: `url("https://images.unsplash.com/photo-1584467541268-b040f83be3fd?auto=format&fit=crop&w=1920&q=80")`,
+          backgroundImage: `url("https://upload.wikimedia.org/wikipedia/commons/e/ea/Koyna_Dam_Spillway.jpg")`,
           backgroundSize: 'cover',
           backgroundPosition: 'left center'
         }}
