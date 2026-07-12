@@ -39,29 +39,136 @@ def seed_database():
 
         # 3. Seed Reservoirs & Dams
         reservoirs_count = db.query(Reservoir).count()
-        if reservoirs_count == 0:
-            print("Seeding database reservoirs...")
-            srisailam = Reservoir(
-                name="srisailam",
-                capacity=500.0,
-                current_level=320.0,
-                district="Kurnool",
-                state="Andhra Pradesh",
-                latitude=16.0886,
-                longitude=78.9006
+        if reservoirs_count < 10:
+            print("Refreshing and seeding full database of real-world Indian reservoirs...")
+            db.query(Reservoir).delete()
+            db.commit()
+
+            tehri = Reservoir(
+                name="Tehri Dam",
+                capacity=2600.0,
+                current_level=1850.0,
+                district="Tehri Garhwal",
+                state="Uttarakhand",
+                latitude=30.3781,
+                longitude=78.4803
             )
-            krishna = Reservoir(
-                name="krishna",
-                capacity=1000.0,
-                current_level=200.0,
+            bhakra = Reservoir(
+                name="Bhakra Nangal Dam",
+                capacity=9340.0,
+                current_level=7100.0,
+                district="Bilaspur",
+                state="Himachal Pradesh",
+                latitude=31.4103,
+                longitude=76.4353
+            )
+            hirakud = Reservoir(
+                name="Hirakud Dam",
+                capacity=5891.0,
+                current_level=4200.0,
+                district="Sambalpur",
+                state="Odisha",
+                latitude=21.5700,
+                longitude=83.8700
+            )
+            sarovar = Reservoir(
+                name="Sardar Sarovar Dam",
+                capacity=9500.0,
+                current_level=6800.0,
+                district="Narmada",
+                state="Gujarat",
+                latitude=21.8294,
+                longitude=73.7483
+            )
+            koyna = Reservoir(
+                name="Koyna Dam",
+                capacity=2797.0,
+                current_level=2100.0,
+                district="Satara",
+                state="Maharashtra",
+                latitude=17.3986,
+                longitude=73.7478
+            )
+            mettur = Reservoir(
+                name="Mettur Dam",
+                capacity=2708.0,
+                current_level=1980.0,
+                district="Salem",
+                state="Tamil Nadu",
+                latitude=11.7944,
+                longitude=77.8011
+            )
+            idukki = Reservoir(
+                name="Idukki Arch Dam",
+                capacity=1996.0,
+                current_level=1450.0,
+                district="Idukki",
+                state="Kerala",
+                latitude=9.8485,
+                longitude=76.9736
+            )
+            maithon = Reservoir(
+                name="Maithon Dam",
+                capacity=1100.0,
+                current_level=820.0,
+                district="Dhanbad",
+                state="Jharkhand",
+                latitude=23.7711,
+                longitude=86.8114
+            )
+            rihand = Reservoir(
+                name="Rihand Dam",
+                capacity=10600.0,
+                current_level=7500.0,
+                district="Sonbhadra",
+                state="Uttar Pradesh",
+                latitude=24.2072,
+                longitude=83.0036
+            )
+            indirasagar = Reservoir(
+                name="Indirasagar Dam",
+                capacity=12200.0,
+                current_level=9800.0,
+                district="Khandwa",
+                state="Madhya Pradesh",
+                latitude=22.2842,
+                longitude=76.4397
+            )
+            tungabhadra = Reservoir(
+                name="Tungabhadra Dam",
+                capacity=3760.0,
+                current_level=2900.0,
+                district="Ballari",
+                state="Karnataka",
+                latitude=15.2639,
+                longitude=76.3347
+            )
+            nagarjuna = Reservoir(
+                name="Nagarjuna Sagar Dam",
+                capacity=11560.0,
+                current_level=8900.0,
                 district="Nalgonda",
                 state="Telangana",
                 latitude=16.5739,
                 longitude=79.3122
             )
-            db.add_all([srisailam, krishna])
+            srisailam = Reservoir(
+                name="Srisailam Dam",
+                capacity=6150.0,
+                current_level=4800.0,
+                district="Kurnool",
+                state="Andhra Pradesh",
+                latitude=16.0886,
+                longitude=78.9006
+            )
+
+            db.add_all([
+                tehri, bhakra, hirakud, sarovar, koyna, mettur, 
+                idukki, maithon, rihand, indirasagar, tungabhadra, 
+                nagarjuna, srisailam
+            ])
             db.commit()
-            print("Reservoirs seeded successfully!")
+            print("Indian reservoirs seeded successfully!")
 
         # 4. Seed Villages
         villages_count = db.query(Village).count()
