@@ -43,11 +43,38 @@ export default function LoginPage() {
   ];
   const [slideIndex, setSlideIndex] = useState(0);
 
+  // Ripple Animation States
+  const [ripples, setRipples] = useState<{ id: number; x: number; y: number; size: number }[]>([]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setSlideIndex((prev) => (prev + 1) % carouselImages.length);
     }, 4500);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const spawnRipple = () => {
+      const newRipple = {
+        id: Date.now() + Math.random(),
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        size: Math.random() * 80 + 40,
+      };
+      setRipples((prev) => [...prev, newRipple]);
+
+      setTimeout(() => {
+        setRipples((prev) => prev.filter((r) => r.id !== newRipple.id));
+      }, 3500);
+    };
+
+    spawnRipple();
+
+    const interval = setInterval(() => {
+      spawnRipple();
+    }, 1800);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Dynamic Base URL Resolver
@@ -192,8 +219,64 @@ export default function LoginPage() {
         backgroundImage: `url("/water_splash_bg.png")`
       }}
     >
+      <style>{`
+        @keyframes ripple-effect {
+          0% {
+            transform: translate(-50%, -50%) scale(0.1);
+            opacity: 0.8;
+            border-color: rgba(56, 189, 248, 0.6);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.4), inset 0 0 10px rgba(56, 189, 248, 0.2);
+          }
+          50% {
+            border-color: rgba(56, 189, 248, 0.4);
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3), inset 0 0 20px rgba(56, 189, 248, 0.15);
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 0;
+            border-color: rgba(56, 189, 248, 0);
+            box-shadow: 0 0 30px rgba(56, 189, 248, 0), inset 0 0 30px rgba(56, 189, 248, 0);
+          }
+        }
+
+        .water-ripple {
+          position: absolute;
+          border: 2px solid rgba(56, 189, 248, 0.5);
+          border-radius: 50%;
+          pointer-events: none;
+          transform: translate(-50%, -50%);
+          animation: ripple-effect 3.5s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+        }
+
+        .water-ripple::after {
+          content: "";
+          position: absolute;
+          top: -6px; right: -6px; bottom: -6px; left: -6px;
+          border: 1px solid rgba(56, 189, 248, 0.3);
+          border-radius: 50%;
+          opacity: 0.7;
+          animation: ripple-effect 3.5s cubic-bezier(0.1, 0.8, 0.3, 1) 0.6s forwards;
+        }
+      `}</style>
+
       {/* Background Blur and Dark Overlay */}
       <div className="absolute inset-0 bg-sky-950/10 backdrop-blur-[1px] z-0" />
+
+      {/* Water Ripples Background Layer */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        {ripples.map((ripple) => (
+          <div
+            key={ripple.id}
+            className="water-ripple"
+            style={{
+              left: `${ripple.x}%`,
+              top: `${ripple.y}%`,
+              width: `${ripple.size}px`,
+              height: `${ripple.size}px`,
+            }}
+          />
+        ))}
+      </div>
       
       {/* Login Card */}
       <div className="w-full max-w-7xl grid md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl bg-white/95 backdrop-blur-md z-10 relative">
