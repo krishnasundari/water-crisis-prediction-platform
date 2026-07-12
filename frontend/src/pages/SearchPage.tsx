@@ -268,7 +268,7 @@ export default function SearchPage() {
                     placeholder="Search Your Village (e.g. Pongodu)"
                     value={citizenQuery}
                     onChange={(e) => setCitizenQuery(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-18 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-20 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
                 <button
