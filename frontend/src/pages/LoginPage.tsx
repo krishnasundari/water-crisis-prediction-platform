@@ -200,8 +200,19 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-indigo-950 to-slate-955 text-white flex items-center justify-center p-6 md:p-12 relative overflow-hidden font-sans">
+    <div 
+      className="min-h-screen w-full relative flex items-center justify-center p-6 md:p-12 overflow-hidden font-sans"
+      style={{
+        backgroundImage: `url("https://images.unsplash.com/photo-1584467541268-b040f83be3fd?auto=format&fit=crop&w=1920&q=80")`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'left center'
+      }}
+    >
       
+      {/* Background Gradient Overlay: Fades the dam photo on the left into the rich blue gradient on the right */}
+      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/20 via-slate-950/80 to-[#072a4a] z-0" />
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/10 via-[#0c4a6e]/40 to-slate-950/70 z-0" />
+
       {/* Background Ripple Waves */}
       <div className="absolute inset-0 pointer-events-none z-0">
         <div className="absolute -bottom-1/4 -right-1/4 w-[80%] h-[80%] rounded-full border border-sky-500/10" />
@@ -259,13 +270,13 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Grid for Features + Dam Map Image */}
-          <div className="grid md:grid-cols-2 gap-6 items-start">
+          {/* Combined Features + Map Center Layout */}
+          <div className="grid grid-cols-12 gap-6 items-center relative">
             
-            {/* Features list */}
-            <div className="space-y-4">
+            {/* Features list (col-span-5) */}
+            <div className="col-span-12 md:col-span-5 space-y-4 z-10">
               {/* Feature 1 */}
-              <div className="bg-slate-900/40 border border-slate-800/50 backdrop-blur-md rounded-2xl p-4 flex gap-4 items-start transition-all hover:border-slate-700/50 hover:bg-slate-900/60">
+              <div className="bg-slate-950/40 border border-slate-800/60 backdrop-blur-md rounded-2xl p-4 flex gap-4 items-start transition-all hover:border-slate-700/50 hover:bg-slate-950/60">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center shrink-0">
                   <Brain className="w-5 h-5" />
                 </div>
@@ -276,7 +287,7 @@ export default function LoginPage() {
               </div>
 
               {/* Feature 2 */}
-              <div className="bg-slate-900/40 border border-slate-800/50 backdrop-blur-md rounded-2xl p-4 flex gap-4 items-start transition-all hover:border-slate-700/50 hover:bg-slate-900/60">
+              <div className="bg-slate-950/40 border border-slate-800/60 backdrop-blur-md rounded-2xl p-4 flex gap-4 items-start transition-all hover:border-slate-700/50 hover:bg-slate-950/60">
                 <div className="w-10 h-10 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20 flex items-center justify-center shrink-0">
                   <Waves className="w-5 h-5" />
                 </div>
@@ -287,7 +298,7 @@ export default function LoginPage() {
               </div>
 
               {/* Feature 3 */}
-              <div className="bg-slate-900/40 border border-slate-800/50 backdrop-blur-md rounded-2xl p-4 flex gap-4 items-start transition-all hover:border-slate-700/50 hover:bg-slate-900/60">
+              <div className="bg-slate-950/40 border border-slate-800/60 backdrop-blur-md rounded-2xl p-4 flex gap-4 items-start transition-all hover:border-slate-700/50 hover:bg-slate-950/60">
                 <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center shrink-0">
                   <Bell className="w-5 h-5" />
                 </div>
@@ -298,7 +309,7 @@ export default function LoginPage() {
               </div>
 
               {/* Feature 4 */}
-              <div className="bg-slate-900/40 border border-slate-800/50 backdrop-blur-md rounded-2xl p-4 flex gap-4 items-start transition-all hover:border-slate-700/50 hover:bg-slate-900/60">
+              <div className="bg-slate-950/40 border border-slate-800/60 backdrop-blur-md rounded-2xl p-4 flex gap-4 items-start transition-all hover:border-slate-700/50 hover:bg-slate-950/60">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shrink-0">
                   <LineChart className="w-5 h-5" />
                 </div>
@@ -309,65 +320,63 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Glowing Map Card */}
-            <div className="relative w-full h-[368px] rounded-3xl overflow-hidden border border-slate-800/80 shadow-2xl shrink-0 group">
-              <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style={{ backgroundImage: `url("https://images.unsplash.com/photo-1584467541268-b040f83be3fd?auto=format&fit=crop&w=800&q=80")` }} />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-slate-950/80 z-0" />
+            {/* Glowing Map center layout (col-span-7) */}
+            <div className="col-span-12 md:col-span-7 relative h-[380px] flex items-center justify-center">
               
-              {/* Glowing nodes SVG */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-85 z-10 pointer-events-none">
-                <svg className="w-[85%] h-[85%] text-sky-400/35" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 400 450">
-                  <path d="M190,40 L220,50 L230,80 L250,90 L260,110 L250,130 L270,140 L290,120 L310,140 L290,160 L280,180 L290,200 L270,220 L260,250 L270,270 L250,290 L230,300 L200,320 L195,350 L190,380 L185,410 L180,430 L170,410 L155,370 L140,340 L135,310 L125,290 L110,280 L120,260 L115,240 L100,230 L80,220 L70,200 L85,185 L95,190 L110,180 L130,195 L145,190 L160,180 L155,160 L140,145 L150,135 L165,140 L180,130 L170,110 L155,95 L165,70 L180,55 Z" strokeDasharray="3,3" />
-                  <circle cx="190" cy="150" r="5" fill="#38bdf8" className="animate-ping" />
-                  <circle cx="190" cy="150" r="3" fill="#38bdf8" />
-                  <circle cx="150" cy="280" r="5" fill="#38bdf8" className="animate-ping" />
-                  <circle cx="150" cy="280" r="3" fill="#38bdf8" />
-                  <circle cx="250" cy="220" r="5" fill="#38bdf8" className="animate-ping" />
-                  <circle cx="250" cy="220" r="3" fill="#38bdf8" />
+              {/* Glowing India Map SVG */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-90 pointer-events-none">
+                <svg className="w-[85%] h-[85%] text-sky-400/40 drop-shadow-[0_0_15px_rgba(56,189,248,0.3)]" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 400 450">
+                  <path d="M190,40 L220,50 L230,80 L250,90 L260,110 L250,130 L270,140 L290,120 L310,140 L290,160 L280,180 L290,200 L270,220 L260,250 L270,270 L250,290 L230,300 L200,320 L195,350 L190,380 L185,410 L180,430 L170,410 L155,370 L140,340 L135,310 L125,290 L110,280 L120,260 L115,240 L100,230 L80,220 L70,200 L85,185 L95,190 L110,180 L130,195 L145,190 L160,180 L155,160 L140,145 L150,135 L165,140 L180,130 L170,110 L155,95 L165,70 L180,55 Z" strokeDasharray="4,4" />
+                  <circle cx="190" cy="150" r="6" fill="#38bdf8" className="animate-ping" />
+                  <circle cx="190" cy="150" r="3.5" fill="#38bdf8" />
+                  <circle cx="150" cy="280" r="6" fill="#38bdf8" className="animate-ping" />
+                  <circle cx="150" cy="280" r="3.5" fill="#38bdf8" />
+                  <circle cx="250" cy="220" r="6" fill="#38bdf8" className="animate-ping" />
+                  <circle cx="250" cy="220" r="3.5" fill="#38bdf8" />
                 </svg>
               </div>
 
               {/* Floating Telemetry Glass Cards */}
-              {/* 1. Rainfall (Top Left) */}
-              <div className="absolute top-5 left-5 bg-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-xl p-3 flex items-center gap-3 shadow-lg z-20">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-                  <CloudRain className="w-4.5 h-4.5" />
+              {/* 1. Rainfall (Top Right) */}
+              <div className="absolute top-2 right-4 bg-slate-950/75 backdrop-blur-lg border border-slate-800/80 rounded-2xl p-4 flex items-center gap-3.5 shadow-2xl transition-all hover:scale-105">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                  <CloudRain className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-[9px] text-slate-400">Rainfall (Today)</p>
-                  <h4 className="text-xs font-bold text-white">24.6 mm</h4>
-                  <p className="text-[8px] text-emerald-400">↑ 12% yesterday</p>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Rainfall (Today)</p>
+                  <h4 className="text-base font-bold text-white">24.6 mm</h4>
+                  <p className="text-[9px] text-emerald-400 font-bold flex items-center gap-0.5">↑ 12% from yesterday</p>
                 </div>
               </div>
 
               {/* 2. Reservoir Storage (Middle Right) */}
-              <div className="absolute top-28 right-5 bg-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-xl p-3 flex items-center gap-3 shadow-lg z-20">
-                <div className="w-8 h-8 rounded-lg bg-teal-500/20 flex items-center justify-center text-teal-400 shrink-0">
-                  <Waves className="w-4.5 h-4.5" />
+              <div className="absolute top-36 right-8 bg-slate-950/75 backdrop-blur-lg border border-slate-800/80 rounded-2xl p-4 flex items-center gap-3.5 shadow-2xl transition-all hover:scale-105">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/20 flex items-center justify-center text-teal-400 shrink-0">
+                  <Waves className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-[9px] text-slate-400">Reservoir Storage</p>
-                  <h4 className="text-xs font-bold text-white">68.7%</h4>
-                  <span className="text-[8px] px-1 py-0.25 rounded-full bg-emerald-500/25 text-emerald-400 font-semibold">Healthy</span>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Reservoir Storage</p>
+                  <h4 className="text-base font-bold text-white">68.7%</h4>
+                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-extrabold">Healthy</span>
                 </div>
               </div>
 
-              {/* 3. Risk Level (Bottom Left) */}
-              <div className="absolute bottom-5 left-5 bg-slate-950/80 backdrop-blur-md border border-slate-800/80 rounded-xl p-3 flex items-center gap-3 shadow-lg z-20">
-                <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                  <AlertTriangle className="w-4.5 h-4.5" />
+              {/* 3. Risk Level (Bottom Right) */}
+              <div className="absolute bottom-4 right-12 bg-slate-950/75 backdrop-blur-lg border border-slate-800/80 rounded-2xl p-4 flex items-center gap-3.5 shadow-2xl transition-all hover:scale-105">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-[9px] text-slate-400">Risk Level</p>
-                  <h4 className="text-xs font-bold text-amber-400">Moderate</h4>
-                  <p className="text-[8px] text-slate-300">West Godavari</p>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Risk Level</p>
+                  <h4 className="text-base font-bold text-amber-400">Moderate</h4>
+                  <p className="text-[9px] text-slate-350">West Godavari</p>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Mission Card */}
-          <div className="bg-slate-900/40 border border-slate-800/50 backdrop-blur-md p-5 rounded-2xl flex items-center gap-4 transition-all hover:bg-slate-900/60">
+          <div className="bg-slate-950/40 border border-slate-800/60 backdrop-blur-md p-5 rounded-2xl flex items-center gap-4 transition-all hover:bg-slate-950/50 max-w-2xl">
             <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center shrink-0">
               <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 text-sky-400" stroke="currentColor" strokeWidth="2.5">
                 <path d="M12 22a7 7 0 0 0 7-7c0-4.3-7-11-7-11S5 10.7 5 15a7 7 0 0 0 7 7z"/>
@@ -375,7 +384,7 @@ export default function LoginPage() {
             </div>
             <div>
               <h4 className="font-bold text-sky-400 text-sm">Our Mission</h4>
-              <p className="text-xs text-slate-300 mt-0.5">Empowering communities and governments with intelligent insights for a water-secure and resilient future.</p>
+              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">Empowering communities and governments with intelligent insights for a water-secure and resilient future.</p>
             </div>
           </div>
         </div>
@@ -383,7 +392,7 @@ export default function LoginPage() {
         {/* RIGHT COLUMN: Floating Login Card (5 cols) */}
         <div className="lg:col-span-5 flex justify-center lg:justify-end">
           
-          <div className="w-full max-w-md bg-slate-50 text-slate-800 rounded-[32px] shadow-2xl p-8 md:p-10 relative border border-slate-200/50 flex flex-col justify-between">
+          <div className="w-full max-w-md bg-white text-slate-800 rounded-[32px] shadow-2xl p-8 md:p-10 relative border border-slate-200/50 flex flex-col justify-between z-20">
             
             <div>
               {/* Circular Droplet Badge */}
@@ -466,7 +475,7 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition-all"
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650 transition-all"
                       >
                         {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
                       </button>
@@ -658,7 +667,7 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600"
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650"
                       >
                         {showConfirmPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
                       </button>
@@ -722,7 +731,7 @@ export default function LoginPage() {
       </div>
       
       {/* Footer copyright below floating card */}
-      <div className="absolute bottom-4 right-6 lg:right-16 text-slate-500 text-[10px] font-medium z-20">
+      <div className="absolute bottom-4 right-6 lg:right-16 text-slate-400 text-[10px] font-medium z-20">
         © 2025 Water Crisis Platform. All rights reserved.
       </div>
     </div>
