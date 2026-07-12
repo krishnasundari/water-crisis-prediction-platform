@@ -76,14 +76,14 @@ export default function Sidebar() {
   ];
 
   return (
-    <div className="w-70 min-h-screen bg-slate-900 text-slate-100 py-8 px-6 flex flex-col border-r border-slate-800 shrink-0 select-none box-border">
+    <div className="w-80 min-h-screen bg-slate-900 text-slate-100 py-8 px-6 flex flex-col border-r border-slate-800 shrink-0 select-none box-border">
       
       {/* Brand Header */}
-      <div className="flex items-center gap-2.5 mb-6">
-        <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-400">
-          <Droplet className="w-5 h-5 animate-pulse" />
+      <div className="flex items-center gap-3.5 mb-7">
+        <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400">
+          <Droplet className="w-6 h-6 animate-pulse" />
         </div>
-        <h2 className="text-lg font-black bg-gradient-to-r from-sky-400 to-blue-400 bg-clip-text text-transparent tracking-tight">
+        <h2 className="text-2xl font-black bg-gradient-to-r from-sky-400 to-blue-400 bg-clip-text text-transparent tracking-tight">
           Platform Node
         </h2>
       </div>
@@ -91,14 +91,14 @@ export default function Sidebar() {
       {/* Logout Action */}
       <button
         onClick={handleLogout}
-        className="w-full py-3 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer mb-7 outline-none"
+        className="w-full py-3.5 px-4.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 rounded-xl text-base font-black flex items-center justify-center gap-2.5 transition-all cursor-pointer mb-8 outline-none"
       >
-        <LogOut className="w-4 h-4" />
+        <LogOut className="w-5 h-5" />
         <span>Sign Out</span>
       </button>
 
       {/* Navigation List */}
-      <ul className="space-y-1.5 p-0 m-0 list-none text-[15px]">
+      <ul className="space-y-2 p-0 m-0 list-none text-base md:text-lg font-bold">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
@@ -106,13 +106,13 @@ export default function Sidebar() {
             <li 
               key={item.path} 
               onClick={() => navigate(item.path)}
-              className={`group flex items-center gap-3.5 py-2.5 px-4 rounded-xl cursor-pointer transition-all ${
+              className={`group flex items-center gap-4 py-3.5 px-4.5 rounded-xl cursor-pointer transition-all ${
                 isActive 
-                  ? "bg-sky-500/10 text-sky-400 font-bold" 
+                  ? "bg-sky-500/10 text-sky-400 font-black" 
                   : "text-slate-400 hover:text-white hover:bg-slate-800/40"
               }`}
             >
-              <Icon className={`w-5 h-5 transition-transform group-hover:scale-105 ${
+              <Icon className={`w-5.5 h-5.5 transition-transform group-hover:scale-105 ${
                 isActive ? "text-sky-400" : "text-slate-500 group-hover:text-slate-350"
               }`} />
               <span>{item.name}</span>
@@ -123,18 +123,18 @@ export default function Sidebar() {
         {/* Operational Alerts item with unread notification badge */}
         <li 
           onClick={() => navigate("/alerts")}
-          className={`group flex items-center gap-3.5 py-2.5 px-4 rounded-xl cursor-pointer relative transition-all ${
+          className={`group flex items-center gap-4 py-3.5 px-4.5 rounded-xl cursor-pointer relative transition-all ${
             location.pathname === "/alerts"
-              ? "bg-sky-500/10 text-sky-400 font-bold"
+              ? "bg-sky-500/10 text-sky-400 font-black"
               : "text-slate-400 hover:text-white hover:bg-slate-800/40"
           }`}
         >
-          <AlertTriangle className={`w-5 h-5 transition-transform group-hover:scale-105 ${
+          <AlertTriangle className={`w-5.5 h-5.5 transition-transform group-hover:scale-105 ${
             location.pathname === "/alerts" ? "text-sky-400" : "text-slate-500 group-hover:text-slate-350"
           }`} />
           <span>Operations Alerts</span>
           {unreadCount > 0 && (
-            <span className="absolute right-4 bg-red-500 text-white rounded-full px-2 py-0.5 text-[10px] font-black shadow-lg shadow-red-500/30 animate-pulse">
+            <span className="absolute right-4.5 bg-red-500 text-white rounded-full px-2.5 py-0.5 text-xs font-black shadow-lg shadow-red-500/30 animate-pulse">
               {unreadCount}
             </span>
           )}
