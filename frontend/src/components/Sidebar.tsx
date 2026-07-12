@@ -17,7 +17,8 @@ import {
   Activity, 
   Waves, 
   AlertTriangle, 
-  LogOut 
+  LogOut,
+  Droplet
 } from "lucide-react";
 
 export default function Sidebar() {
@@ -75,75 +76,29 @@ export default function Sidebar() {
   ];
 
   return (
-    <div
-      style={{
-        width: "280px",
-        minHeight: "100vh",
-        background: "#0f172a",
-        color: "white",
-        padding: "32px 24px",
-        display: "flex",
-        flexDirection: "column",
-        borderRight: "1px solid #1e293b",
-        flexShrink: 0,
-        boxSizing: "border-box"
-      }}
-    >
-      <h2 style={{ 
-        fontSize: "1.4rem", 
-        fontWeight: 900, 
-        background: "linear-gradient(to right, #38bdf8, #60a5fa)", 
-        WebkitBackgroundClip: "text", 
-        WebkitTextFillColor: "transparent", 
-        marginBottom: "24px",
-        display: "flex",
-        alignItems: "center",
-        gap: "10px"
-      }}>
-        🌊 Platform Node
-      </h2>
+    <div className="w-70 min-h-screen bg-slate-900 text-slate-100 py-8 px-6 flex flex-col border-r border-slate-800 shrink-0 select-none box-border">
+      
+      {/* Brand Header */}
+      <div className="flex items-center gap-2.5 mb-6">
+        <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-400">
+          <Droplet className="w-5 h-5 animate-pulse" />
+        </div>
+        <h2 className="text-lg font-black bg-gradient-to-r from-sky-400 to-blue-400 bg-clip-text text-transparent tracking-tight">
+          Platform Node
+        </h2>
+      </div>
 
+      {/* Logout Action */}
       <button
         onClick={handleLogout}
-        style={{
-          width: "100%",
-          padding: "12px",
-          background: "rgba(239, 68, 68, 0.1)",
-          color: "#f87171",
-          border: "1px solid rgba(239, 68, 68, 0.2)",
-          borderRadius: "10px",
-          cursor: "pointer",
-          marginBottom: "28px",
-          fontSize: "13px",
-          fontWeight: "bold",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "8px",
-          transition: "all 0.3s"
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "rgba(239, 68, 68, 0.2)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)";
-        }}
+        className="w-full py-3 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/30 text-red-400 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer mb-7 outline-none"
       >
         <LogOut className="w-4 h-4" />
-        Sign Out
+        <span>Sign Out</span>
       </button>
 
-      <ul
-        style={{
-          listStyle: "none",
-          padding: 0,
-          margin: 0,
-          fontSize: "15px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px"
-        }}
-      >
+      {/* Navigation List */}
+      <ul className="space-y-1.5 p-0 m-0 list-none text-[15px]">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
@@ -151,32 +106,15 @@ export default function Sidebar() {
             <li 
               key={item.path} 
               onClick={() => navigate(item.path)}
-              style={{ 
-                cursor: "pointer",
-                padding: "10px 14px",
-                borderRadius: "10px",
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                transition: "all 0.2s",
-                background: isActive ? "rgba(56, 189, 248, 0.15)" : "transparent",
-                color: isActive ? "#38bdf8" : "#94a3b8",
-                fontWeight: isActive ? "bold" : "normal"
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
-                  e.currentTarget.style.color = "white";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.color = "#94a3b8";
-                }
-              }}
+              className={`group flex items-center gap-3.5 py-2.5 px-4 rounded-xl cursor-pointer transition-all ${
+                isActive 
+                  ? "bg-sky-500/10 text-sky-400 font-bold" 
+                  : "text-slate-400 hover:text-white hover:bg-slate-800/40"
+              }`}
             >
-              <Icon className="w-5 h-5" />
+              <Icon className={`w-5 h-5 transition-transform group-hover:scale-105 ${
+                isActive ? "text-sky-400" : "text-slate-500 group-hover:text-slate-350"
+              }`} />
               <span>{item.name}</span>
             </li>
           );
@@ -185,48 +123,18 @@ export default function Sidebar() {
         {/* Operational Alerts item with unread notification badge */}
         <li 
           onClick={() => navigate("/alerts")}
-          style={{ 
-            cursor: "pointer",
-            padding: "10px 14px",
-            borderRadius: "10px",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            transition: "all 0.2s",
-            position: "relative",
-            background: location.pathname === "/alerts" ? "rgba(56, 189, 248, 0.15)" : "transparent",
-            color: location.pathname === "/alerts" ? "#38bdf8" : "#94a3b8",
-            fontWeight: unreadCount > 0 || location.pathname === "/alerts" ? "bold" : "normal"
-          }}
-          onMouseEnter={(e) => {
-            if (location.pathname !== "/alerts") {
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
-              e.currentTarget.style.color = "white";
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (location.pathname !== "/alerts") {
-              e.currentTarget.style.background = "transparent";
-              e.currentTarget.style.color = "#94a3b8";
-            }
-          }}
+          className={`group flex items-center gap-3.5 py-2.5 px-4 rounded-xl cursor-pointer relative transition-all ${
+            location.pathname === "/alerts"
+              ? "bg-sky-500/10 text-sky-400 font-bold"
+              : "text-slate-400 hover:text-white hover:bg-slate-800/40"
+          }`}
         >
-          <AlertTriangle className="w-5 h-5" />
+          <AlertTriangle className={`w-5 h-5 transition-transform group-hover:scale-105 ${
+            location.pathname === "/alerts" ? "text-sky-400" : "text-slate-500 group-hover:text-slate-350"
+          }`} />
           <span>Operations Alerts</span>
           {unreadCount > 0 && (
-            <span
-              style={{
-                position: "absolute",
-                right: "12px",
-                background: "#ef4444",
-                color: "white",
-                borderRadius: "10px",
-                padding: "2px 8px",
-                fontSize: "11px",
-                fontWeight: "black",
-                boxShadow: "0 0 10px rgba(239, 68, 68, 0.5)"
-              }}
-            >
+            <span className="absolute right-4 bg-red-500 text-white rounded-full px-2 py-0.5 text-[10px] font-black shadow-lg shadow-red-500/30 animate-pulse">
               {unreadCount}
             </span>
           )}

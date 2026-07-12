@@ -14,8 +14,20 @@ import {
   Legend,
 } from "recharts";
 import { getBaseURL } from "../utils/api";
-
 import useWebSocket from "../hooks/useWebSocket";
+import { 
+  Home, 
+  Database, 
+  CheckCircle, 
+  AlertCircle, 
+  XCircle, 
+  Bell, 
+  TrendingUp, 
+  ShieldAlert,
+  Activity,
+  Layers,
+  LineChart as LineIcon
+} from "lucide-react";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -59,43 +71,43 @@ export default function DashboardPage() {
     {
       title: "Total Villages",
       value: stats.total_villages,
-      icon: "🏘️",
+      icon: Home,
       color: "#1976d2",
     },
     {
       title: "Reservoirs",
       value: stats.total_reservoirs,
-      icon: "💧",
+      icon: Database,
       color: "#0288d1",
     },
     {
       title: "Safe",
       value: stats.safe_villages,
-      icon: "🟢",
+      icon: CheckCircle,
       color: "#2e7d32",
     },
     {
       title: "Moderate",
       value: stats.moderate_risk_villages,
-      icon: "🟡",
+      icon: AlertCircle,
       color: "#f9a825",
     },
     {
       title: "High Risk",
       value: stats.high_risk_villages,
-      icon: "🔴",
+      icon: XCircle,
       color: "#d32f2f",
     },
     {
       title: "Alerts",
       value: stats.active_alerts,
-      icon: "🚨",
+      icon: Bell,
       color: "#ef6c00",
     },
     {
       title: "Avg Risk Score",
       value: `${stats.average_risk_score}%`,
-      icon: "📈",
+      icon: TrendingUp,
       color: "#6a1b9a",
     },
   ];
@@ -127,308 +139,194 @@ export default function DashboardPage() {
   const COLORS = ["#4caf50", "#ff9800", "#f44336"];
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f4f6f9" }}>
+    <div className="flex min-h-screen bg-slate-50 font-sans">
       <Sidebar />
 
-      <div
-        style={{
-          flex: 1,
-          padding: "48px 40px",
-          fontFamily: "system-ui, -apple-system, sans-serif",
-          boxSizing: "border-box",
-          maxWidth: "calc(100% - 280px)"
-        }}
-      >
-        <h1 style={{ color: "#0f172a", fontSize: "2.5rem", fontWeight: 900, letterSpacing: "-0.03em", marginBottom: "20px" }}>
-          🌊 Water Crisis Prediction & Management Platform
+      <div className="flex-1 py-12 px-10 box-border max-w-[calc(100%-280px)]">
+        
+        {/* Page Header Title */}
+        <h1 className="text-slate-900 text-3xl md:text-4xl font-black tracking-tight mb-5 leading-none">
+          Water Crisis Prediction & Management Platform
         </h1>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "20px",
-            marginBottom: "32px",
-            flexWrap: "wrap",
-          }}
-        >
-          <div
-            style={{
-              background: "#e8f5e9",
-              padding: "18px 24px",
-              borderRadius: "12px",
-              fontWeight: 700,
-              fontSize: "16px",
-              color: "#1b5e20",
-              border: "1px solid #c8e6c9",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
-            }}
-          >
-            🟢 System Status : Online
+        {/* Live Operational Status Indicators Bar */}
+        <div className="flex flex-row gap-5 mb-8 flex-wrap">
+          <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 py-3.5 px-6 rounded-2xl font-bold text-sm shadow-sm flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>System Status : Online</span>
           </div>
 
-          <div
-            style={{
-              background: "#e3f2fd",
-              padding: "18px 24px",
-              borderRadius: "12px",
-              fontWeight: 700,
-              fontSize: "16px",
-              color: "#0d47a1",
-              border: "1px solid #bbdefb",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
-            }}
-          >
-            📡 AI Prediction : Active
+          <div className="bg-blue-50 text-blue-700 border border-blue-200 py-3.5 px-6 rounded-2xl font-bold text-sm shadow-sm flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+            <span>AI Prediction : Active</span>
           </div>
 
-          <div
-            style={{
-              background: "#fff3e0",
-              padding: "18px 24px",
-              borderRadius: "12px",
-              fontWeight: 700,
-              fontSize: "16px",
-              color: "#e65100",
-              border: "1px solid #ffe0b2",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
-            }}
-          >
-            🕒 Last Updated : Just Now
+          <div className="bg-amber-50 text-amber-700 border border-amber-200 py-3.5 px-6 rounded-2xl font-bold text-sm shadow-sm flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+            <span>Last Updated : Just Now</span>
           </div>
         </div>
 
-        <p style={{ color: "#475569", fontSize: "18px", fontWeight: 500, marginBottom: "36px" }}>
+        <p className="text-slate-500 text-lg font-semibold mb-9">
           AI Powered Water Resource Monitoring Dashboard
         </p>
 
-        {/* Dashboard Cards */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: "24px",
-          }}
-        >
-          {cards.map((card) => (
-            <div
-              key={card.title}
-              style={{
-                background: `linear-gradient(135deg, ${card.color}, ${card.color}CC)`,
-                color: "white",
-                transition: "all 0.3s",
-                cursor: "pointer",
-                borderRadius: "16px",
-                padding: "24px",
-                boxShadow: "0 4px 15px rgba(0,0,0,0.08)",
-              }}
-            >
-              <h3
+        {/* Dashboard Grid Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {cards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <div
+                key={card.title}
+                className="p-6 rounded-2xl text-white shadow-md hover:shadow-lg transition-all duration-300 flex flex-col justify-between select-none"
                 style={{
-                  marginBottom: "12px",
-                  color: "white",
-                  fontSize: "18px",
-                  fontWeight: 800,
-                  opacity: 0.9,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px"
+                  background: `linear-gradient(135deg, ${card.color}, ${card.color}DD)`
                 }}
               >
-                <span>{card.icon}</span>
-                <span>{card.title}</span>
-              </h3>
+                <div className="flex items-center gap-2.5 mb-4 opacity-90">
+                  <Icon className="w-5 h-5 text-white" />
+                  <span className="text-sm font-bold uppercase tracking-wider">{card.title}</span>
+                </div>
 
-              <h1
-                style={{
-                  color: "white",
-                  fontSize: "46px",
-                  fontWeight: 900,
-                  margin: 0,
-                  letterSpacing: "-0.02em"
-                }}
-              >
-                {card.value}
-              </h1>
-            </div>
-          ))}
+                <h1 className="text-4xl lg:text-5xl font-black tracking-tight leading-none m-0">
+                  {card.value}
+                </h1>
+              </div>
+            );
+          })}
         </div>
 
-        {/* Charts Section */}
-        <div
-          style={{
-            marginTop: "48px",
-            background: "white",
-            borderRadius: "16px",
-            padding: "28px",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-            border: "1px solid #e2e8f0"
-          }}
-        >
-          <h2 style={{ fontSize: "24px", fontWeight: 800, color: "#0f172a", marginBottom: "24px" }}>📊 Risk Distribution</h2>
+        {/* Chart Widgets */}
+        <div className="mt-10 bg-white border border-slate-200/80 rounded-2xl p-7 shadow-sm">
+          <h2 className="text-xl md:text-2xl font-extrabold text-slate-800 mb-6 flex items-center gap-2">
+            <Layers className="w-6 h-6 text-slate-500" />
+            <span>Risk Distribution</span>
+          </h2>
 
-          <ResponsiveContainer width="100%" height={380}>
-            <PieChart>
-              <Pie
-                data={riskData}
-                dataKey="value"
-                innerRadius={80}
-                outerRadius={135}
-                paddingAngle={4}
-                label
-              >
-                {riskData.map((_, index) => (
-                  <Cell
-                    key={index}
-                    fill={COLORS[index]}
-                  />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          <div className="w-full h-[380px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={riskData}
+                  dataKey="value"
+                  innerRadius={80}
+                  outerRadius={135}
+                  paddingAngle={4}
+                  label
+                >
+                  {riskData.map((_, index) => (
+                    <Cell
+                      key={index}
+                      fill={COLORS[index]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        <div
-          style={{
-            marginTop: "48px",
-            background: "white",
-            borderRadius: "16px",
-            padding: "28px",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-            border: "1px solid #e2e8f0"
-          }}
-        >
-          <h2 style={{ fontSize: "24px", fontWeight: 800, color: "#0f172a", marginBottom: "24px" }}>📈 Monthly Water Risk Trend</h2>
+        <div className="mt-10 bg-white border border-slate-200/80 rounded-2xl p-7 shadow-sm">
+          <h2 className="text-xl md:text-2xl font-extrabold text-slate-800 mb-6 flex items-center gap-2">
+            <LineIcon className="w-6 h-6 text-slate-500" />
+            <span>Monthly Water Risk Trend</span>
+          </h2>
 
-          <ResponsiveContainer width="100%" height={350}>
-            <LineChart data={monthlyTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 13, fontWeight: "bold" }} />
-              <YAxis tick={{ fontSize: 13, fontWeight: "bold" }} />
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 13, fontWeight: "bold" }} />
-              <Line
-                type="monotone"
-                dataKey="risk"
-                stroke="#1976d2"
-                strokeWidth={4}
-                activeDot={{ r: 8 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <div className="w-full h-[350px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={monthlyTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 13, fontWeight: "bold" }} />
+                <YAxis tick={{ fontSize: 13, fontWeight: "bold" }} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 13, fontWeight: "bold" }} />
+                <Line
+                  type="monotone"
+                  dataKey="risk"
+                  stroke="#1976d2"
+                  strokeWidth={4}
+                  activeDot={{ r: 8 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
-        {/* Alerts Section */}
-        <div
-          style={{
-            marginTop: "48px",
-            background: "white",
-            borderRadius: "16px",
-            padding: "28px",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-            border: "1px solid #e2e8f0"
-          }}
-        >
-          <h2 style={{ fontSize: "24px", fontWeight: 800, color: "#0f172a", marginBottom: "20px" }}>🚨 Active Operations Alerts Feed</h2>
+        {/* Active Alerts Operations Feed Section */}
+        <div className="mt-10 bg-white border border-slate-200/80 rounded-2xl p-7 shadow-sm">
+          <h2 className="text-xl md:text-2xl font-extrabold text-slate-800 mb-6 flex items-center gap-2">
+            <ShieldAlert className="w-6 h-6 text-slate-500" />
+            <span>Active Operations Alerts Feed</span>
+          </h2>
 
           {alerts.length === 0 ? (
-            <p style={{ color: "#10b981", fontSize: "16px", fontWeight: "bold" }}>
-              ✅ All systems stable. No active alerts or breaches logged.
+            <p className="text-emerald-600 text-base font-bold">
+              All systems stable. No active alerts or breaches logged.
             </p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "20px" }}>
+            <div className="flex flex-col gap-4 mt-5">
               {alerts.map((a) => (
                 <div
                   key={a.id}
-                  style={{
-                    padding: "18px 24px",
-                    borderRadius: "12px",
-                    fontSize: "15px",
-                    background:
-                      a.severity === "critical"
-                        ? "#fef2f2"
-                        : a.severity === "high"
-                        ? "#fff7ed"
-                        : "#fef8e6",
-                    borderLeft: `6px solid ${
-                      a.severity === "critical"
-                        ? "#ef4444"
-                        : a.severity === "high"
-                        ? "#f97316"
-                        : "#eab308"
-                    }`,
-                    color: "#1e293b",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
-                  }}
+                  className={`p-5 rounded-2xl border-l-[6px] shadow-sm flex flex-col gap-2 transition-all ${
+                    a.severity === "critical"
+                      ? "bg-red-50/40 border-red-500 text-slate-800"
+                      : a.severity === "high"
+                      ? "bg-amber-50/40 border-amber-500 text-slate-800"
+                      : "bg-yellow-50/30 border-yellow-500 text-slate-800"
+                  }`}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    <span style={{
-                      color:
-                        a.severity === "critical"
-                          ? "#dc2626"
-                          : a.severity === "high"
-                          ? "#ea580c"
-                          : "#ca8a04"
-                    }}>
-                      [{a.severity}] {a.alert_type} | 📡 {a.data_source || 'AI Prediction Engine'}
+                  <div className="flex justify-between items-center font-bold text-xs uppercase tracking-wider">
+                    <span className={
+                      a.severity === "critical"
+                        ? "text-red-600"
+                        : a.severity === "high"
+                        ? "text-amber-600"
+                        : "text-yellow-600"
+                    }>
+                      [{a.severity}] {a.alert_type} | DataSource: {a.data_source || 'AI Prediction Engine'}
                     </span>
-                    <span style={{ color: "#64748b" }}>
+                    <span className="text-slate-450 font-semibold lowercase">
                       {new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                  <div style={{ marginTop: "8px", lineHeight: "24px", fontWeight: 550 }}>{a.message}</div>
+                  <div className="text-sm font-semibold text-slate-650 leading-relaxed mt-1">{a.message}</div>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* AI Summary Section */}
-        <div
-          style={{
-            marginTop: "48px",
-            background: "white",
-            borderRadius: "16px",
-            padding: "28px",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-            border: "1px solid #e2e8f0"
-          }}
-        >
-          <h2 style={{ fontSize: "24px", fontWeight: 800, color: "#0f172a", marginBottom: "20px" }}>🤖 AI Prediction Summary</h2>
+        {/* AI Predictive Summary Statistics Block */}
+        <div className="mt-10 bg-white border border-slate-200/80 rounded-2xl p-7 shadow-sm">
+          <h2 className="text-xl md:text-2xl font-extrabold text-slate-800 mb-6 flex items-center gap-2">
+            <Activity className="w-6 h-6 text-slate-500" />
+            <span>AI Prediction Summary</span>
+          </h2>
 
-          <div
-            style={{
-              lineHeight: "36px",
-              fontSize: "18px",
-              background: "#f9fafb",
-              padding: "24px",
-              borderRadius: "12px",
-              color: "#334155"
-            }}
-          >
-            📈 Average Risk Score :
-            <b style={{ fontSize: "22px", color: "#6a1b9a", marginLeft: "6px" }}> {stats.average_risk_score}%</b>
+          <div className="text-base lg:text-[17px] leading-loose text-slate-600 bg-slate-50/60 border border-slate-100 p-6 rounded-2xl flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-slate-200/50 pb-3">
+              <span className="font-bold">Average Risk Score</span>
+              <span className="text-lg lg:text-xl font-black text-purple-700">{stats.average_risk_score}%</span>
+            </div>
+            
+            <div className="flex items-center justify-between border-b border-slate-200/50 pb-3">
+              <span className="font-bold">High Risk Villages</span>
+              <span className="text-lg lg:text-xl font-black text-red-600">{stats.high_risk_villages}</span>
+            </div>
 
-            <br />
-            <br />
+            <div className="flex items-center justify-between border-b border-slate-200/50 pb-3">
+              <span className="font-bold">Safe Villages</span>
+              <span className="text-lg lg:text-xl font-black text-emerald-600">{stats.safe_villages}</span>
+            </div>
 
-            🔴 High Risk Villages :
-            <b style={{ fontSize: "22px", color: "#d32f2f", marginLeft: "6px" }}> {stats.high_risk_villages}</b>
-
-            <br />
-            <br />
-
-            🟢 Safe Villages :
-            <b style={{ fontSize: "22px", color: "#2e7d32", marginLeft: "6px" }}> {stats.safe_villages}</b>
-
-            <br />
-            <br />
-
-            The AI model recommends continuous monitoring of rainfall,
-            groundwater level and reservoir capacity for sustainable water
-            resource management.
+            <p className="text-sm font-medium text-slate-500 leading-relaxed mt-2 italic">
+              The AI decision support model recommends continuous monitoring of rainfall forecasting, groundwater depletion levels, and reservoir overflow capacities for sustainable regional water resource management.
+            </p>
           </div>
         </div>
+
       </div>
     </div>
   );
