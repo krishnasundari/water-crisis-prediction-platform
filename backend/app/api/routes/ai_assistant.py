@@ -1,4 +1,6 @@
 import re
+import urllib.request
+import urllib.parse
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -215,29 +217,34 @@ def chat(
 
     # 5. Default Fallback
     else:
-        if "hello" in msg_lower or "hi" in msg_lower or "hey" in msg_lower:
-            assistant_response = (
-                "👋 **Hello! I am your AI Disaster Decision Support Assistant.**\n\n"
-                "I am here to help you monitor rainfall forecasting, river runoff levels, reservoir capacities, and regional flood risk probabilities in real-time. "
-                "How can I assist you in your emergency operations planning today?"
-            )
-        elif "who are you" in msg_lower or "what do you do" in msg_lower:
-            assistant_response = (
-                "🤖 **I am the National Hydrological Command AI Assistant.**\n\n"
-                "I process real-time satellite telemetry, monitor 13 major reservoirs and dams across India, evaluate river warning levels, and calculate regional flood risk predictions. "
-                "You can ask me questions about specific dams (like Srisailam, Koyna, or Nagarjuna Sagar) or villages to receive immediate advisory analysis."
-            )
-        elif "thank" in msg_lower:
-            assistant_response = (
-                "You're very welcome! I'm here 24/7 to help coordinate disaster response and resources. Let me know if you need any other telemetry reports!"
-            )
-        else:
-            total_vil = db.query(Village).count()
-            total_res = db.query(Reservoir).count()
-            high_risk = db.query(Prediction).filter(Prediction.risk_level == "High").count()
-            active_alerts = db.query(Alert).filter(Alert.is_read == False).count()
-            low_reservoirs = db.query(Reservoir).filter(Reservoir.current_level < (Reservoir.capacity * 0.40)).count()
+        total_vil = db.query(Village).count()
+        total_res = db.query(Reservoir).count()
+        high_risk = db.query(Prediction).filter(Prediction.risk_level == "High").count()
+        active_alerts = db.query(Alert).filter(Alert.is_read == False).count()
+        low_reservoirs = db.query(Reservoir).filter(Reservoir.current_level < (Reservoir.capacity * 0.40)).count()
 
+        system_context = (
+            "You are the National Hydrological Command AI Assistant. "
+            "You are integrated into the Water Crisis Platform dashboard. "
+            f"The platform currently monitors: {total_vil} villages, {total_res} major reservoirs/dams across India, "
+            f"{high_risk} villages under High flood risk, and {active_alerts} active alerts. "
+            "Respond to the user's question directly, clearly, and concisely, exactly like ChatGPT. "
+            "If they ask general knowledge questions, real-life questions, or questions unrelated to water, answer them fully and accurately. "
+            "Use clear Markdown formatting with lists, headers, or bullet points where appropriate."
+        )
+
+        try:
+            # Query the Pollinations AI text completion endpoint
+            query_url = f"https://text.pollinations.ai/{urllib.parse.quote(user_message)}?system={urllib.parse.quote(system_context)}"
+            req = urllib.request.Request(
+                query_url, 
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            )
+            # Timeout set to 8 seconds to prevent blocking
+            with urllib.request.urlopen(req, timeout=8) as response:
+                assistant_response = response.read().decode('utf-8')
+        except Exception as e:
+            # Fallback to local metrics report in case of network issues or timeout
             assistant_response = (
                 "🤖 **Hydrological Command Assistant Online**\n\n"
                 "I am monitoring live telemetry database feeds to answer your questions! Try asking me:\n"
