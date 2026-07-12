@@ -224,7 +224,7 @@ export default function LoginPage() {
       <div className="absolute inset-0 bg-sky-950/10 backdrop-blur-[1px] z-0" />
 
       {/* Water Ripples Background Layer */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
         {ripples.map((ripple) => (
           <div
             key={ripple.id}
@@ -240,7 +240,7 @@ export default function LoginPage() {
       </div>
       
       {/* Login Card */}
-      <div className="w-full max-w-7xl grid md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl bg-white/95 backdrop-blur-md z-10 relative">
+      <div className="w-full max-w-7xl grid md:grid-cols-2 rounded-3xl overflow-hidden shadow-2xl bg-white/95 backdrop-blur-md z-20 relative">
         
         {/* LEFT SIDE PANEL WITH SCROLLING PHOTO CAROUSEL */}
         <div className="relative hidden md:flex flex-col justify-between p-12 text-white overflow-hidden">
