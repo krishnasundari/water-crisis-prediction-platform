@@ -3,18 +3,23 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import NullPool
 from app.core.config import settings
 
+# Force SQLite if DATABASE_URL is the default placeholder or not set properly
+_db_url = settings.DATABASE_URL
+if not _db_url or "your_db" in _db_url or "YOUR_DB" in _db_url:
+    _db_url = "sqlite:///./water_crisis.db"
+
 # Database engine
 engine = create_engine(
-    settings.DATABASE_URL,
+    _db_url,
     poolclass=NullPool,
     echo=settings.DEBUG,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+    connect_args={"check_same_thread": False} if "sqlite" in _db_url else {}
 )
 
 # SQLite optimization event listeners
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
-    if "sqlite" in settings.DATABASE_URL:
+    if "sqlite" in _db_url:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")

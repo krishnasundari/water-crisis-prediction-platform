@@ -40,3 +40,4 @@ python-json-logger==2.0.7
 
 # Production
 gunicorn==21.2.0
+
