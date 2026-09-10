@@ -12,8 +12,9 @@ COPY . .
 ENV DATABASE_URL=sqlite:///./water_crisis.db
 ENV DEBUG=False
 ENV JWT_SECRET_KEY=water-crisis-secret-key-production-2024
-ENV PORT=10000
+
+RUN chmod +x /app/start.sh
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "gunicorn app.main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0: --timeout 120 --log-level info"]
+ENTRYPOINT ["/bin/sh", "/app/start.sh"]
