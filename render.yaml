@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: water-crisis-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:///./water_crisis.db
+      - key: JWT_SECRET_KEY
+        value: water-crisis-secret-key-2024-production
+      - key: DEBUG
+        value: "False"
+      - key: ENVIRONMENT
+        value: production
+
+  - type: web
+    name: water-crisis-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://water-crisis-prediction-platform-1.onrender.com/api/v1
