@@ -13,8 +13,6 @@ ENV DATABASE_URL=sqlite:///./water_crisis.db
 ENV DEBUG=False
 ENV JWT_SECRET_KEY=water-crisis-secret-key-production-2024
 
-RUN chmod +x /app/start.sh
-
 EXPOSE 10000
 
-ENTRYPOINT ["/bin/sh", "/app/start.sh"]
+CMD ["sh", "/app/start.sh"]
