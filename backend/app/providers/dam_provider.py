@@ -11,35 +11,28 @@ class DamProvider(BaseTelemetryProvider):
 
     def get_reservoir_level(self, name: str, latitude: float, longitude: float, fallback_level: float) -> Dict[str, Any]:
         """
-        Retrieves the real live reservoir water level from CWC public endpoints if available.
-        Otherwise, falls back to the local hydrological simulation, marking data as Estimated.
+        Returns reservoir water level data.
+
+        No public CWC REST API is available for individual reservoir gauge heights.
+        The CWC Weekly Bulletin (PDF) provides storage % data; see cwc_bulletin_provider.py
+        for structured ingestion from that source.
+
+        All values returned here are estimates derived from the Open-Meteo
+        precipitation-driven runoff model.  They are explicitly marked as
+        Estimated and must not be presented as live CWC telemetry.
+
+        DATA INTEGRITY NOTE: A previous version of this provider returned a
+        hardcoded constant (322.45 m) for Srisailam Dam as "Live CWC telemetry".
+        That value was synthetic and has been removed.  No fabricated measurements
+        are returned as official data.
         """
-        clean_name = name.lower().strip()
-        
-        try:
-            # To showcase both "Live" and "Estimated" states clearly:
-            # Srisailam represents a fully active live telemetry hook, 
-            # while others fallback to local Estimation algorithms.
-            if "srisailam" in clean_name:
-                # Live CWC telemetry
-                return {
-                    "water_level": 322.45,  # CWC active telemetry reading
-                    "inflow": 12.8,
-                    "outflow": 2.5,
-                    "data_source": self.get_provider_name(),
-                    "data_status": self.get_status_label(is_fallback=False),
-                    "success": True
-                }
-            
-            # Trigger fallback for other reservoirs
-            raise Exception("No active live CWC hook for " + name)
-            
-        except Exception:
-            return {
-                "water_level": fallback_level,
-                "inflow": None,
-                "outflow": None,
-                "data_source": "Estimated (Hydrological Runoff Model)",
-                "data_status": self.get_status_label(is_fallback=True),
-                "success": False
-            }
+        # No verified live CWC API endpoint is available for any reservoir.
+        # Return the rainfall-driven estimate for all reservoirs.
+        return {
+            "water_level": fallback_level,
+            "inflow": None,
+            "outflow": None,
+            "data_source": "Estimated (Hydrological Runoff Model)",
+            "data_status": self.get_status_label(is_fallback=True),
+            "success": False,
+        }
