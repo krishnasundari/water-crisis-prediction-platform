@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 import requests
 from typing import List, Dict, Any
 import logging
@@ -103,7 +104,21 @@ class AlertProvider:
 
                         event_id = props.get("eventid", "unknown")
                         iso_date = props.get("fromdate", "")
+                        todate = props.get("todate", "")
                         short_desc = description[:200] if description else name
+
+                        # Parse or estimate validity window
+                        valid_until = None
+                        if todate:
+                            try:
+                                valid_until = datetime.fromisoformat(todate.replace("Z", "+00:00"))
+                            except Exception:
+                                valid_until = None
+                        if not valid_until and iso_date:
+                            try:
+                                valid_until = datetime.fromisoformat(iso_date.replace("Z", "+00:00")) + timedelta(days=3)
+                            except Exception:
+                                valid_until = datetime.utcnow() + timedelta(days=3)
 
                         alerts.append({
                             "alert_type": alert_type,
@@ -113,7 +128,13 @@ class AlertProvider:
                                 f"{name}. {short_desc}"
                             ),
                             "data_source": self.get_provider_name(),
+                            "issuing_authority": "Global Disaster Alert & Coordination System (GDACS)",
+                            "source_identifier": f"GDACS_{event_type}_{event_id}",
+                            "is_official": True,
                             "affected_locations": country or "India",
+                            "issue_time": iso_date or datetime.utcnow().isoformat(),
+                            "valid_until": valid_until,
+                            "trigger_reason": f"Official international disaster warning issued by GDACS for {name} ({alert_type}) at level {level.upper()}.",
                         })
 
                 except requests.exceptions.Timeout:
@@ -172,6 +193,7 @@ class AlertProvider:
                 else:
                     sev = "medium"
 
+                now_time = datetime.utcnow()
                 alerts.append({
                     "alert_type": (
                         "flood"
@@ -181,7 +203,13 @@ class AlertProvider:
                     "severity": sev,
                     "message": f"GDACS WARNING: {title}. {(desc or '')[:150]}",
                     "data_source": self.get_provider_name(),
+                    "issuing_authority": "Global Disaster Alert & Coordination System (GDACS)",
+                    "source_identifier": f"GDACS_XML_{abs(hash(title)) % 1000000}",
+                    "is_official": True,
                     "affected_locations": country or "India Catchment Region",
+                    "issue_time": now_time.isoformat(),
+                    "valid_until": now_time + timedelta(days=3),
+                    "trigger_reason": f"Official disaster warning ingested from GDACS XML feed for {title}.",
                 })
 
             return alerts

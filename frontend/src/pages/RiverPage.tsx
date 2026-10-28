@@ -251,7 +251,7 @@ export default function RiverPage() {
                           Last Updated: {new Date(selectedRiver.last_updated_at || selectedRiver.last_updated || new Date()).toLocaleString()}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Status:</span>
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                           (selectedRiver.data_status || "Simulated") === "Live"
@@ -262,8 +262,26 @@ export default function RiverPage() {
                         }`}>
                           {selectedRiver.data_status || "Simulated"}
                         </span>
+                        {selectedRiver.quality_status && (
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                            selectedRiver.quality_status === "FRESH"
+                              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                              : selectedRiver.quality_status === "STALE"
+                              ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                              : "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                          }`}>
+                            {selectedRiver.quality_status}
+                          </span>
+                        )}
                       </div>
                     </div>
+
+                    {selectedRiver.freshness_warning && (
+                      <div className="mt-2 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-1.5 flex items-center gap-1.5">
+                        <span>⚠️</span>
+                        <span>{selectedRiver.freshness_warning}</span>
+                      </div>
+                    )}
 
                   </div>
 

@@ -285,12 +285,12 @@ class ErrorResponse(BaseModel):
     status_code: int
     timestamp: datetime
 class GoogleLoginRequest(BaseModel):
-    credential: str
+    credential: str = Field(..., min_length=10)
 
 class ForgotPasswordRequest(BaseModel):
-    email: str
+    email: EmailStr
 
 class ResetPasswordRequest(BaseModel):
-    email: str
-    otp_code: str
-    new_password: str
+    email: EmailStr
+    otp_code: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=8, max_length=255)

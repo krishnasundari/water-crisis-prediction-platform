@@ -220,6 +220,20 @@ class TestParseStorageTable:
         for rec in records:
             assert "CWC" in rec["data_source"]
 
+    def test_extracts_live_storage_bcm_correctly(self):
+        """Bulletin line with BCM number before % should extract live_storage_bcm."""
+        obs_date = date(2025, 5, 8)
+        records = _parse_storage_table(
+            FIXTURE_BULLETIN_TEXT_WITH_MATCHES,
+            obs_date,
+            "https://cwc.gov.in/test.pdf",
+        )
+        hirakud_rec = next((r for r in records if r["app_reservoir_name"] == "Hirakud Dam"), None)
+        assert hirakud_rec is not None
+        assert hirakud_rec["live_storage_bcm"] is not None
+        assert isinstance(hirakud_rec["live_storage_bcm"], float)
+        assert hirakud_rec["live_storage_bcm"] > 0
+
 
 # ---------------------------------------------------------------------------
 # Tests: fetch_latest_cwc_bulletin_records (provider-level, mocked)

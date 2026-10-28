@@ -1,0 +1,28 @@
+{
+  "model_version": "v1.0.0-preliminary",
+  "trained_at": "2026-10-28T05:58:57.275637",
+  "target": "7_day_storage_change_mcm",
+  "prediction_horizon_days": 7,
+  "training_samples": 30,
+  "data_provenance": "Open-Meteo ERA5-Land Archive + CWC Weekly Storage Bulletins",
+  "features": [
+    "storage_ratio",
+    "storage_delta_7d",
+    "rainfall_30d",
+    "rainfall_7d",
+    "sin_season",
+    "cos_season"
+  ],
+  "temporal_split": "Time-ordered 80/20 forward split (shuffle=False, zero future leakage)",
+  "baseline": "Persistence Baseline (S_{t+7} = S_t)",
+  "evaluation_metrics": {
+    "model_mae_mcm": 0.111,
+    "model_rmse_mcm": 0.139,
+    "r2_score": 0.872,
+    "baseline_mae_mcm": 0.386,
+    "baseline_rmse_mcm": 0.459,
+    "mae_improvement_pct": 71.3,
+    "residual_std_error": 0.126
+  },
+  "provenance_details": {}
+}

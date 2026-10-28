@@ -21,6 +21,12 @@ except Exception:
     scaler = None
     USE_ML_MODEL = False
 
+from app.ml.water_shortage_pipeline import (
+    validate_inference_inputs,
+    compute_hydrological_vulnerability_index,
+    water_shortage_forecaster,
+)
+
 
 # ----------------------------------------------------
 # Predict Water Crisis Risk
@@ -40,9 +46,13 @@ def predict_water_crisis(
     -------
     {
         "risk_score": float,
-        "risk_level": str
+        "risk_level": str,
+        "is_rule_based": bool
     }
     """
+    is_valid, err = validate_inference_inputs(rainfall, population, reservoir_capacity, groundwater_level)
+    if not is_valid:
+        raise ValueError(err)
 
     if USE_ML_MODEL:
         features = np.array([
@@ -81,7 +91,19 @@ def predict_water_crisis(
     return {
         "risk_score": confidence,
         "risk_level": level,
+        "is_rule_based": not USE_ML_MODEL,
     }
+
+def predict_reservoir_shortage(db, reservoir_id: int, horizon_days: int = 7):
+    """
+    Expose time-series 7-day forward reservoir depletion forecaster
+    from the water shortage pipeline.
+    """
+    return water_shortage_forecaster.predict_reservoir_storage(
+        db=db,
+        reservoir_id=reservoir_id,
+        horizon_days=horizon_days,
+    )
 
 from datetime import datetime
 

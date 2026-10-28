@@ -16,6 +16,7 @@ from app.models.models import (
     River
 )
 from app.schemas.schemas import AIMessageRequest
+from app.services.grounded_ai_service import grounded_ai_assistant
 
 router = APIRouter()
 
@@ -95,8 +96,8 @@ def chat(
             assistant_response = (
                 f"🌊 **Telemetry Report: {target_dam.name}**\n\n"
                 f"Here is the live telemetry and storage capacity for this location:\n"
-                f"• **Current Live Storage**: **{target_dam.current_level:,} TMC** ({pct:.1f}% of total capacity)\n"
-                f"• **Maximum Storage Capacity**: **{target_dam.capacity:,} TMC**\n"
+                f"• **Current Live Storage**: **{target_dam.current_level:,} MCM** ({pct:.1f}% of total capacity)\n"
+                f"• **Maximum Storage Capacity**: **{target_dam.capacity:,} MCM**\n"
                 f"• **District / State**: {target_dam.district} District, {target_dam.state}\n"
                 f"• **Geographic Coordinates**: {target_dam.latitude}° N, {target_dam.longitude}° E\n"
                 f"• **Data Source Status**: **{target_dam.data_status or 'Active'}** | Source: {target_dam.data_source or 'Estimated (Runoff Calculation)'}\n\n"
@@ -129,7 +130,7 @@ def chat(
                 for r, pct in matches:
                     msg += (
                         f"💧 **{r.name}** ({r.district} District)\n"
-                        f"  • Live Level: **{pct:.1f}%** ({r.current_level:,} TMC / {r.capacity:,} TMC capacity)\n\n"
+                        f"  • Live Level: **{pct:.1f}%** ({r.current_level:,} MCM / {r.capacity:,} MCM capacity)\n\n"
                     )
                 assistant_response = msg
             else:
@@ -137,7 +138,7 @@ def chat(
                 msg += "Here is the status of all active reservoirs in the database:\n"
                 for r in reservoirs:
                     pct = (r.current_level / (r.capacity or 1)) * 100
-                    msg += f"• **{r.name}**: **{pct:.1f}%** capacity ({r.current_level:,} TMC / {r.capacity:,} TMC)\n"
+                    msg += f"• **{r.name}**: **{pct:.1f}%** capacity ({r.current_level:,} MCM / {r.capacity:,} MCM)\n"
                 assistant_response = msg
 
     # 4. Why is X under flood/drought risk?
@@ -178,7 +179,7 @@ def chat(
                 msg += "• **Reservoir Systems Storage**:\n"
                 for d in dams:
                     pct = (d.current_level / (d.capacity or 1)) * 105
-                    msg += f"  - **{d.name} Reservoir**: utilized at **{pct:.1f}%** ({d.current_level:,} TMC level).\n"
+                    msg += f"  - **{d.name} Reservoir**: utilized at **{pct:.1f}%** ({d.current_level:,} MCM level).\n"
             else:
                 msg += f"• **Reservoir Storage**: No direct reservoir dependency logged in {v.district} District.\n"
 
@@ -215,50 +216,10 @@ def chat(
                 f"• {db.query(Alert).filter(Alert.is_read == False).count()} active alert warning(s) in the database."
             )
 
-    # 5. Default Fallback
+    # 5. Default Fallback: Evidence-backed grounded AI generation
     else:
-        total_vil = db.query(Village).count()
-        total_res = db.query(Reservoir).count()
-        high_risk = db.query(Prediction).filter(Prediction.risk_level == "High").count()
-        active_alerts = db.query(Alert).filter(Alert.is_read == False).count()
-        low_reservoirs = db.query(Reservoir).filter(Reservoir.current_level < (Reservoir.capacity * 0.40)).count()
-
-        system_context = (
-            "You are the National Hydrological Command AI Assistant. "
-            "You are integrated into the Water Crisis Platform dashboard. "
-            f"The platform currently monitors: {total_vil} villages, {total_res} major reservoirs/dams across India, "
-            f"{high_risk} villages under High flood risk, and {active_alerts} active alerts. "
-            "Respond to the user's question directly, clearly, and concisely, exactly like ChatGPT. "
-            "If they ask general knowledge questions, real-life questions, or questions unrelated to water, answer them fully and accurately. "
-            "Use clear Markdown formatting with lists, headers, or bullet points where appropriate."
-        )
-
-        try:
-            # Query the Pollinations AI text completion endpoint
-            query_url = f"https://text.pollinations.ai/{urllib.parse.quote(user_message)}?system={urllib.parse.quote(system_context)}"
-            req = urllib.request.Request(
-                query_url, 
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-            )
-            # Timeout set to 8 seconds to prevent blocking
-            with urllib.request.urlopen(req, timeout=8) as response:
-                assistant_response = response.read().decode('utf-8')
-        except Exception as e:
-            # Fallback to local metrics report in case of network issues or timeout
-            assistant_response = (
-                "🤖 **Hydrological Command Assistant Online**\n\n"
-                "I am monitoring live telemetry database feeds to answer your questions! Try asking me:\n"
-                "• *'what is the dam present in sagar'* (specific reservoir query)\n"
-                "• *'Why is Gaya Village under flood risk?'* (village diagnostics)\n"
-                "• *'Which dams are above 80% capacity?'* (threshold query)\n"
-                "• *'Which districts received maximum rainfall today?'*\n"
-                "• *'Which river is rising fastest?'*\n\n"
-                "**Current System Summary Metrics:**\n"
-                f"• Monitored Villages: **{total_vil}**\n"
-                f"• Active Reservoirs: **{total_res}** ({low_reservoirs} below 40% capacity)\n"
-                f"• High Flood/Drought Risk Predictions: **{high_risk}**\n"
-                f"• Unresolved Active Alerts: **{active_alerts}**"
-            )
+        grounded_result = grounded_ai_assistant.generate_grounded_response(user_message, db=db)
+        assistant_response = grounded_result["response"]
 
     # Write conversation log
     conversation = AIConversation(
@@ -345,4 +306,34 @@ def recommendations(
         "low_reservoirs": low_reservoirs,
         "active_alerts": active_alerts,
         "recommendations": recommendations
+    }
+
+@router.post("/grounded-query")
+def grounded_query(
+    request: AIMessageRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Evidence-backed grounded AI query endpoint.
+    Returns the assistant's answer along with exact database evidence citations and provenance.
+    """
+    result = grounded_ai_assistant.generate_grounded_response(request.message, db=db)
+    
+    # Save conversation log
+    conversation = AIConversation(
+        user_message=request.message,
+        assistant_response=result["response"],
+        created_at=datetime.now()
+    )
+    db.add(conversation)
+    db.commit()
+    db.refresh(conversation)
+
+    return {
+        "user_message": conversation.user_message,
+        "assistant_response": conversation.assistant_response,
+        "evidence_used": result["evidence_used"],
+        "missing_notes": result["missing_notes"],
+        "provider": result["provider"],
+        "created_at": conversation.created_at,
     }

@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.models import Role, User, Reservoir, Village
 from app.services.auth_service import hash_password
+from app.core.config import settings
 from app.db.database import SessionLocal
 
 def seed_database():
@@ -29,7 +30,7 @@ def seed_database():
                     email="admin@water.gov",
                     username="admin_water",
                     full_name="Admin User",
-                    hashed_password=hash_password("Admin@123"),
+                    hashed_password=hash_password(settings.ADMIN_DEFAULT_PASSWORD),
                     role_id=admin_role.id,
                     is_active=True
                 )
@@ -37,12 +38,10 @@ def seed_database():
                 db.commit()
                 print("Default admin user created!")
 
-        # 3. Seed Reservoirs & Dams
+        # 3. Seed Reservoirs & Dams (Safe non-destructive seeding)
         reservoirs_count = db.query(Reservoir).count()
-        if reservoirs_count < 10:
-            print("Refreshing and seeding full database of real-world Indian reservoirs...")
-            db.query(Reservoir).delete()
-            db.commit()
+        if reservoirs_count == 0:
+            print("Seeding full database of real-world Indian reservoirs...")
 
             tehri = Reservoir(
                 name="Tehri Dam",

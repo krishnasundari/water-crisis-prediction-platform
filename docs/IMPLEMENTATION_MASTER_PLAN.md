@@ -218,15 +218,15 @@ See `docs/DEPLOYMENT_BASELINE.md` for full deployment configuration details.
 
 | Task ID | Task | Current Status | Priority |
 |---------|------|---------------|----------|
-| DI-01 | Replace hardcoded Srisailam/Ganges "live" values with honest labels or real API calls | MOCKED | 🔴 |
-| DI-02 | Replace hardcoded IMD fallback alert with labeled simulation (not "OFFICIAL IMD") | MOCKED | 🔴 |
+| DI-01 | Replace hardcoded Srisailam/Ganges "live" values with honest labels or real API calls | IMPLEMENTED | 🔴 |
+| DI-02 | Replace hardcoded IMD fallback alert with labeled simulation (not "OFFICIAL IMD") | IMPLEMENTED | 🔴 |
 | DI-03 | Clearly label all simulated/synthetic data in API responses and UI | MISSING | 🔴 |
 
 ### Priority 2 — Critical Infrastructure
 
 | Task ID | Task | Current Status | Priority |
 |---------|------|---------------|----------|
-| INF-01 | Migrate SQLite to persistent PostgreSQL (Supabase free tier or Render Postgres) | NOT STARTED | 🔴 |
+| INF-01 | Migrate SQLite to persistent PostgreSQL (Supabase free tier or Render Postgres) | IN PROGRESS | 🔴 |
 | INF-02 | Configure SMTP email (Gmail app password) for OTP delivery | PARTIALLY DONE | 🟠 |
 | INF-03 | Add authentication guard to `/api/v1/ai/chat` endpoint | MISSING | 🟠 |
 | INF-04 | Fix broken test file (conftest.py, remove invalid Depends usage) | BROKEN | 🟠 |
@@ -235,7 +235,7 @@ See `docs/DEPLOYMENT_BASELINE.md` for full deployment configuration details.
 
 | Task ID | Task | Current Status | Priority |
 |---------|------|---------------|----------|
-| DATA-01 | Integrate real CWC API (or India-WRIS) for dam storage levels | MISSING | 🟠 |
+| DATA-01 | Integrate real CWC API (or India-WRIS) for dam storage levels | IMPLEMENTED | 🟠 |
 | DATA-02 | Integrate real CWC river gauge API | MISSING | 🟠 |
 | DATA-03 | Collect/use real historical water crisis dataset for ML training | MISSING | 🟠 |
 | DATA-04 | Add source + observation + retrieval timestamps to all data responses | PARTIALLY DONE | 🟠 |

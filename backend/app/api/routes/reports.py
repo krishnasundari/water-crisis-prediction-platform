@@ -18,14 +18,14 @@ def list_reports(db: Session = Depends(get_db)):
 
 @router.post("/generate")
 def create_report(report: ReportGenerateRequest, db: Session = Depends(get_db)):
-    title = f"{report.report_type.upper()} Report {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}"
-    file_path = generate_report(report.report_type, title, db)
+    title = f"{report.report_type.upper()} Report {datetime.utcnow().strftime('%Y-%m-%d %H-%M-%S')}"
+    file_path = generate_report(report.report_type, title, db, filters=report.filters)
     db_report = Report(
         title=title,
         report_type=report.report_type.lower(),
         file_path=file_path,
         filters=json.dumps(report.filters or {}),
-        created_at=datetime.now()
+        created_at=datetime.utcnow()
     )
     db.add(db_report)
     db.commit()
@@ -40,21 +40,34 @@ def get_report(report_id:int, db:Session=Depends(get_db)):
     return report
 
 @router.get("/{report_id}/download")
-def download_report(report_id:int, db:Session=Depends(get_db)):
-    report=db.query(Report).filter(Report.id==report_id).first()
+def download_report(report_id: int, db: Session = Depends(get_db)):
+    report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    if not os.path.exists(report.file_path):
-        raise HTTPException(status_code=404, detail="Generated file not found")
-    return FileResponse(report.file_path, filename=os.path.basename(report.file_path), media_type="application/octet-stream")
+    
+    from app.utils.report_generator import REPORTS_DIR
+    real_report_dir = os.path.realpath(REPORTS_DIR)
+    real_file_path = os.path.realpath(report.file_path)
+
+    # Path traversal verification
+    if not real_file_path.startswith(real_report_dir) or not os.path.exists(real_file_path):
+        raise HTTPException(status_code=404, detail="Generated file not found or path outside allowed storage")
+
+    return FileResponse(real_file_path, filename=os.path.basename(real_file_path), media_type="application/octet-stream")
 
 @router.delete("/{report_id}")
-def delete_report(report_id:int, db:Session=Depends(get_db)):
-    report=db.query(Report).filter(Report.id==report_id).first()
+def delete_report(report_id: int, db: Session = Depends(get_db)):
+    report = db.query(Report).filter(Report.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    if report.file_path and os.path.exists(report.file_path):
-        os.remove(report.file_path)
+    
+    from app.utils.report_generator import REPORTS_DIR
+    real_report_dir = os.path.realpath(REPORTS_DIR)
+    if report.file_path:
+        real_file_path = os.path.realpath(report.file_path)
+        if real_file_path.startswith(real_report_dir) and os.path.exists(real_file_path):
+            os.remove(real_file_path)
+            
     db.delete(report)
     db.commit()
-    return {"message":"Report deleted successfully."}
+    return {"message": "Report deleted successfully."}

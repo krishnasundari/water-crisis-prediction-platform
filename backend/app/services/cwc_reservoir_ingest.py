@@ -149,10 +149,19 @@ def ingest_cwc_bulletin(db: Session) -> dict:
             skipped += 1
             continue
 
-        # Derive estimated volume from storage %:
-        # capacity is stored in MCM; live_storage_mcm = pct/100 * capacity
-        # This is a DERIVED value, clearly labelled.
-        estimated_level_mcm = round((storage_pct / 100.0) * reservoir.capacity, 2)
+        # Determine storage volume in MCM:
+        # If live_storage_bcm is directly reported in the bulletin, convert BCM to MCM (1 BCM = 1000 MCM).
+        # Otherwise, derive live volume from the official percentage: (storage_pct / 100.0) * capacity.
+        live_storage_bcm = rec.get("live_storage_bcm")
+        if live_storage_bcm is not None and live_storage_bcm > 0:
+            direct_mcm = round(live_storage_bcm * 1000.0, 2)
+            # Sanity check: direct volume should not exceed 130% of design capacity
+            if direct_mcm <= reservoir.capacity * 1.3:
+                estimated_level_mcm = direct_mcm
+            else:
+                estimated_level_mcm = round((storage_pct / 100.0) * reservoir.capacity, 2)
+        else:
+            estimated_level_mcm = round((storage_pct / 100.0) * reservoir.capacity, 2)
 
         recorded_at_dt = datetime(obs_date.year, obs_date.month, obs_date.day, 12, 0, 0)
 

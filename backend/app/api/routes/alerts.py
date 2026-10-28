@@ -10,13 +10,86 @@ from app.schemas.schemas import AlertCreate
 router = APIRouter()
 
 
+from typing import Optional
+from pydantic import BaseModel
+
+class AcknowledgeRequest(BaseModel):
+    user_name: Optional[str] = "Operator"
+
+class ResolveRequest(BaseModel):
+    resolution_notes: str
+    user_name: Optional[str] = "Operator"
+
 @router.get("/")
-def list_alerts(db: Session = Depends(get_db)):
+def list_alerts(
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    alert_type: Optional[str] = None,
+    is_official: Optional[bool] = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(Alert)
+    if status and status != "all":
+        query = query.filter(Alert.status == status)
+    if severity and severity != "all":
+        query = query.filter(Alert.severity == severity)
+    if alert_type and alert_type != "all":
+        query = query.filter(Alert.alert_type == alert_type)
+    if is_official is not None:
+        query = query.filter(Alert.is_official == is_official)
+
     return (
-        db.query(Alert)
+        query
         .order_by(Alert.created_at.desc())
         .all()
     )
+
+@router.post("/evaluate-rules")
+def evaluate_alert_rules(db: Session = Depends(get_db)):
+    """
+    Trigger evaluation of documented hydrological alert rules.
+    Prevents duplicates and auto-resolves subsided conditions.
+    """
+    from app.services.alert_service import alert_service
+    return alert_service.evaluate_all_rules(db=db)
+
+@router.put("/{alert_id}/acknowledge")
+def acknowledge_alert_endpoint(
+    alert_id: int,
+    payload: Optional[AcknowledgeRequest] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Operator acknowledges an alert. Records timestamp and actor.
+    """
+    from app.services.alert_service import alert_service
+    user_name = payload.user_name if payload else "Operator"
+    try:
+        updated = alert_service.acknowledge_alert(db, alert_id, user_identifier=user_name)
+        return updated
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.put("/{alert_id}/resolve")
+def resolve_alert_endpoint(
+    alert_id: int,
+    payload: ResolveRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Resolve an alert with mandatory resolution notes and operator identification.
+    """
+    from app.services.alert_service import alert_service
+    try:
+        updated = alert_service.resolve_alert(
+            db,
+            alert_id=alert_id,
+            resolution_notes=payload.resolution_notes,
+            user_identifier=payload.user_name,
+        )
+        return updated
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/")
 def create_alert(

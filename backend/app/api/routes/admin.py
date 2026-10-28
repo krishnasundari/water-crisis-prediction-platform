@@ -51,6 +51,54 @@ def _require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
+@router.get(
+    "/sync-status",
+    summary="Get data synchronization engine diagnostics",
+    tags=["Admin"],
+)
+def get_sync_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_require_admin),
+):
+    """
+    Return telemetry and diagnostic data for the background scheduler and providers.
+    Exposes run counts, failure counts, per-source last attempt and success timestamps,
+    and active concurrency lock status without revealing credentials or secrets.
+    """
+    from app.services.sync_service import get_sync_diagnostics
+    return {
+        "status": "success",
+        "diagnostics": get_sync_diagnostics(db=db),
+    }
+
+
+@router.post(
+    "/sync-trigger",
+    summary="Trigger immediate synchronization run across all official sources",
+    tags=["Admin"],
+)
+async def trigger_sync(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(_require_admin),
+):
+    """
+    Trigger an immediate, non-overlapping synchronization run across all integrated sources.
+    Respects the concurrency lock (returns HTTP 409 if another run is in progress).
+    """
+    from app.services.sync_service import execute_scheduled_sync
+    result = await execute_scheduled_sync(db, run_cwc_bulletin=True, force_all=True)
+    if result.get("status") == "SKIPPED_CONCURRENT":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A synchronization run is currently active. Concurrent execution skipped.",
+        )
+    logger.info(f"Manual sync triggered by admin user {current_user.username}: {result.get('status')}")
+    return {
+        "status": "completed",
+        "result": result,
+    }
+
+
 @router.post(
     "/ingest/cwc-bulletin",
     summary="Trigger CWC Weekly Bulletin ingestion",
@@ -87,7 +135,7 @@ def trigger_cwc_bulletin_ingest(
         logger.error(f"CWC bulletin ingest error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ingestion failed: {str(e)}",
+            detail="Ingestion operation encountered an error. Check server logs.",
         )
 
 
@@ -138,5 +186,5 @@ def trigger_rainfall_backfill(
         logger.error(f"Rainfall backfill error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Backfill failed: {str(e)}",
+            detail="Backfill operation encountered an error. Check server logs.",
         )

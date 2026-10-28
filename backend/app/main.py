@@ -7,7 +7,7 @@ import logging
 
 from app.core.config import settings
 from app.db.database import engine, Base, SessionLocal
-from app.api.routes import auth, villages, reservoirs, predictions, forecasts, alerts, reports, dashboard, ai_assistant, analytics, weather, websocket, rivers, evacuation, admin
+from app.api.routes import auth, villages, reservoirs, predictions, forecasts, alerts, reports, dashboard, ai_assistant, analytics, weather, websocket, rivers, evacuation, admin, flood_intelligence
 import asyncio
 from app.services.sync_service import sync_all_data
 
@@ -19,84 +19,78 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def run_schema_migrations():
-    """Ensure that new metadata columns exist in the SQLite database tables"""
-    from sqlalchemy import text
+    """Ensure that legacy metadata columns exist in existing database tables using dialect-aware inspection"""
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    existing_tables = inspector.get_table_names()
+
+    # Column migrations only needed for existing legacy tables
+    migrations = [
+        ("reservoirs", "data_source", "VARCHAR(100) DEFAULT 'Estimated (Runoff Calculation)'"),
+        ("reservoirs", "last_updated_at", "TIMESTAMP"),
+        ("reservoirs", "data_status", "VARCHAR(50) DEFAULT 'Estimated'"),
+        ("rivers", "data_source", "VARCHAR(100) DEFAULT 'Simulated Telemetry'"),
+        ("rivers", "last_updated_at", "TIMESTAMP"),
+        ("rivers", "data_status", "VARCHAR(50) DEFAULT 'Simulated'"),
+        ("alerts", "data_source", "VARCHAR(100) DEFAULT 'AI Prediction Engine'"),
+        ("alerts", "issued_at", "TIMESTAMP"),
+        ("alerts", "affected_locations", "VARCHAR(255)"),
+        ("alerts", "river_id", "INTEGER"),
+        ("alerts", "status", "VARCHAR(30) DEFAULT 'active'"),
+        ("alerts", "is_official", "BOOLEAN DEFAULT 0"),
+        ("alerts", "issuing_authority", "VARCHAR(100)"),
+        ("alerts", "source_identifier", "VARCHAR(100)"),
+        ("alerts", "trigger_reason", "TEXT"),
+        ("alerts", "valid_until", "TIMESTAMP"),
+        ("alerts", "acknowledged_at", "TIMESTAMP"),
+        ("alerts", "acknowledged_by", "VARCHAR(100)"),
+        ("alerts", "resolved_at", "TIMESTAMP"),
+        ("alerts", "resolved_by", "VARCHAR(100)"),
+        ("alerts", "resolution_notes", "TEXT"),
+        ("alerts", "telemetry_snapshot", "TEXT"),
+        ("alerts", "status_history", "TEXT"),
+    ]
+
     db = SessionLocal()
     try:
-        # Reservoir migrations
-        try:
-            db.execute(text("ALTER TABLE reservoirs ADD COLUMN data_source VARCHAR(100) DEFAULT 'Estimated (Runoff Calculation)'"))
-            db.commit()
-            logger.info("Migrated reservoirs table: added data_source")
-        except Exception:
-            db.rollback()
-        
-        try:
-            db.execute(text("ALTER TABLE reservoirs ADD COLUMN last_updated_at DATETIME"))
-            db.commit()
-            logger.info("Migrated reservoirs table: added last_updated_at")
-        except Exception:
-            db.rollback()
-
-        try:
-            db.execute(text("ALTER TABLE reservoirs ADD COLUMN data_status VARCHAR(50) DEFAULT 'Estimated'"))
-            db.commit()
-            logger.info("Migrated reservoirs table: added data_status")
-        except Exception:
-            db.rollback()
-
-        # River migrations
-        try:
-            db.execute(text("ALTER TABLE rivers ADD COLUMN data_source VARCHAR(100) DEFAULT 'Simulated Telemetry'"))
-            db.commit()
-            logger.info("Migrated rivers table: added data_source")
-        except Exception:
-            db.rollback()
-        
-        try:
-            db.execute(text("ALTER TABLE rivers ADD COLUMN last_updated_at DATETIME"))
-            db.commit()
-            logger.info("Migrated rivers table: added last_updated_at")
-        except Exception:
-            db.rollback()
-
-        try:
-            db.execute(text("ALTER TABLE rivers ADD COLUMN data_status VARCHAR(50) DEFAULT 'Simulated'"))
-            db.commit()
-            logger.info("Migrated rivers table: added data_status")
-        except Exception:
-            db.rollback()
-
-        # Alert migrations
-        try:
-            db.execute(text("ALTER TABLE alerts ADD COLUMN data_source VARCHAR(100) DEFAULT 'AI Prediction Engine'"))
-            db.commit()
-            logger.info("Migrated alerts table: added data_source")
-        except Exception:
-            db.rollback()
-        
-        try:
-            db.execute(text("ALTER TABLE alerts ADD COLUMN issued_at DATETIME"))
-            db.commit()
-            logger.info("Migrated alerts table: added issued_at")
-        except Exception:
-            db.rollback()
-
-        try:
-            db.execute(text("ALTER TABLE alerts ADD COLUMN affected_locations VARCHAR(255)"))
-            db.commit()
-            logger.info("Migrated alerts table: added affected_locations")
-        except Exception:
-            db.rollback()
-            
+        for table, col_name, col_type in migrations:
+            if table in existing_tables:
+                columns = [col["name"] for col in inspector.get_columns(table)]
+                if col_name not in columns:
+                    try:
+                        db.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                        db.commit()
+                        logger.info(f"Migrated {table} table: added {col_name}")
+                    except Exception as e:
+                        db.rollback()
+                        logger.warning(f"Could not add {col_name} to {table}: {e}")
+        # Non-destructive composite index migrations for high-throughput time series
+        index_migrations = [
+            ("ix_rainfall_records_res_date", "rainfall_records", "(reservoir_id, measurement_date)"),
+            ("ix_reservoir_history_res_date", "reservoir_history", "(reservoir_id, recorded_at)"),
+            ("ix_river_history_riv_date", "river_history", "(river_id, recorded_at)"),
+            ("ix_villages_district_state", "villages", "(district, state)"),
+            ("ix_reservoirs_district_state", "reservoirs", "(district, state)"),
+            ("ix_alerts_status", "alerts", "(status)"),
+            ("ix_alerts_is_official", "alerts", "(is_official)"),
+            ("ix_alerts_source_id", "alerts", "(source_identifier)"),
+        ]
+        for idx_name, table, cols in index_migrations:
+            if table in existing_tables:
+                try:
+                    db.execute(text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} {cols}"))
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+                    logger.warning(f"Could not ensure index {idx_name}: {e}")
     finally:
         db.close()
 
-# Run database schema migrations
-run_schema_migrations()
-
-# Create database tables
+# Create database tables first so models are up-to-date natively on fresh databases
 Base.metadata.create_all(bind=engine)
+
+# Run legacy schema migrations (adds columns if upgrading older SQLite databases)
+run_schema_migrations()
 
 # Seed roles and default admin user
 from app.db.seed import seed_database
@@ -108,15 +102,15 @@ async def background_sync_loop():
     await asyncio.sleep(10)
     while True:
         try:
-            logger.info("⏰ Background scheduler starting synchronization run...")
+            logger.info("â° Background scheduler starting synchronization run...")
             db = SessionLocal()
             try:
                 await sync_all_data(db)
             finally:
                 db.close()
-            logger.info("✅ Background scheduler synchronization run complete.")
+            logger.info("âœ… Background scheduler synchronization run complete.")
         except Exception as e:
-            logger.error(f"❌ Background scheduler failed: {str(e)}")
+            logger.error(f"âŒ Background scheduler failed: {str(e)}")
         
         # Wait 15 minutes (900 seconds) before running sync again
         await asyncio.sleep(900)
@@ -124,11 +118,13 @@ async def background_sync_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    logger.info("🚀 Water Crisis Platform Backend Starting...")
+    logger.info("ðŸš€ Water Crisis Platform Backend Starting...")
+    if not settings.DEBUG and not settings.is_jwt_secret_secure:
+        logger.critical("SECURITY ADVISORY: Production is running with a default or insecure JWT_SECRET_KEY! Please configure a strong JWT_SECRET_KEY in environment variables.")
     sync_task = asyncio.create_task(background_sync_loop())
     yield
     sync_task.cancel()
-    logger.info("🛑 Water Crisis Platform Backend Shutting Down...")
+    logger.info("ðŸ›‘ Water Crisis Platform Backend Shutting Down...")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -138,12 +134,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add CORS middleware
+# Add CORS middleware with strict origin and credential protection
+cors_origins = settings.CORS_ORIGINS
+allow_wildcard = "*" in cors_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=cors_origins,
+    allow_credentials=not allow_wildcard,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
 
@@ -205,12 +203,13 @@ app.include_router(websocket.router, prefix="/api/v1")
 app.include_router(rivers.router, prefix="/api/v1/rivers", tags=["Rivers"])
 app.include_router(evacuation.router, prefix="/api/v1/evacuation", tags=["Evacuation Routing"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin Ingestion"])
+app.include_router(flood_intelligence.router, prefix="/api/v1/flood-intelligence", tags=["Flood Intelligence"])
 
 @app.get("/", tags=["System"])
 async def root():
     """Welcome endpoint"""
     return {
-        "message": "🌊 Water Crisis Prediction & Management Platform",
+        "message": "ðŸŒŠ Water Crisis Prediction & Management Platform",
         "version": settings.API_VERSION,
         "docs": "/docs",
         "redoc": "/redoc"

@@ -1,437 +1,424 @@
+"""
+Sync Service and Robust Scheduler Architecture
+================================================
+Implements reliable, source-cadenced synchronization for official sources:
+  1. Open-Meteo Forecast & Current Weather (Cadence: 15-30 mins)
+  2. GDACS Disaster Alerts (Cadence: 30-60 mins)
+  3. CWC Weekly Storage Bulletin (Cadence: 12-24 hours)
+
+Guarantees:
+  - Idempotent execution
+  - Non-overlapping execution guards (asyncio Lock)
+  - Diagnostic run logs with status, timing, records ingested, and errors
+  - Observation timestamps preserved separately from retrieval timestamps
+  - No secret exposure in logs
+  - Bounded retries with backoff
+"""
+
 import asyncio
+import logging
+import os
+import time
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional
 import requests
-from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models.models import Reservoir, Village, RainfallRecord, GroundwaterRecord, Prediction, Alert, River
+
+from app.models.models import (
+    Reservoir,
+    Village,
+    RainfallRecord,
+    GroundwaterRecord,
+    Prediction,
+    Alert,
+    River,
+    ReservoirHistory,
+    RiverHistory,
+    SyncLock,
+)
 from app.ml.models.predictor import predict_water_crisis, predict_flood_risk
 from app.core.websocket_manager import manager
 from app.services.weather_service import calculate_distance
-
-# Import Providers
 from app.providers.dam_provider import DamProvider
 from app.providers.river_provider import RiverProvider
 from app.providers.alert_provider import AlertProvider
 
-async def sync_all_data(db: Session):
-    """
-    Perform a complete database update query using Live Telemetry Providers:
-    1. Loop all dams/reservoirs -> Query Open-Meteo live rain -> Fetch CWC/NWIC live levels -> Save RainfallRecord -> Inflow calculation -> Update current levels & metadata.
-    2. Loop all villages -> Query Open-Meteo live stats -> Save GroundwaterRecord -> Re-run ML predictions -> Save predictions.
-    3. Generate AI warning alerts if ML risk levels are high/critical.
-    4. Loop all rivers -> Fetch CWC river gauge heights -> Update levels, flow rates, and metadata.
-    5. Sync official disaster warnings from GDACS/NDMA feed.
-    6. Broadcast event via WebSocket to refresh React clients automatically.
-    """
-    print("===== STARTING DATA SYNC ENGINE (PROVIDER ARCHITECTURE) =====")
-    
-    # Instantiate Providers
-    dam_prov = DamProvider()
-    river_prov = RiverProvider()
-    alert_prov = AlertProvider()
-    
-    # 1. Update Reservoirs
-    reservoirs = db.query(Reservoir).all()
-    for res in reservoirs:
-        lat = res.latitude or 0.0
-        lon = res.longitude or 0.0
-        
-        # Query Open-Meteo current precipitation
-        w_url = "https://api.open-meteo.com/v1/forecast"
-        w_params = {
-            "latitude": lat,
-            "longitude": lon,
-            "current": "precipitation",
-            "timezone": "auto"
-        }
-        
-        rain = 0.0
-        try:
-            resp = requests.get(w_url, params=w_params, timeout=5)
-            if resp.ok:
-                current = resp.json().get("current", {})
-                rain = current.get("precipitation", 0.0) or 0.0
-        except Exception as e:
-            print(f"Error querying weather for dam {res.name}: {str(e)}")
-            
-        # Log rainfall record
-        rain_record = RainfallRecord(
-            reservoir_id=res.id,
-            district=res.district,
-            measurement_date=datetime.now(),
-            rainfall_amount=rain
-        )
-        db.add(rain_record)
-        
-        # Calculate local rain-driven level baseline to supply as fallback
-        inflow_added = rain * 0.35
-        fallback_level = min(res.capacity, res.current_level + inflow_added)
-        
-        # Query Dam Provider
-        res_telemetry = dam_prov.get_reservoir_level(res.name, lat, lon, fallback_level)
-        
-        res.current_level = res_telemetry["water_level"]
-        res.data_source = res_telemetry["data_source"]
-        res.data_status = res_telemetry["data_status"]
-        res.last_updated_at = datetime.now()
-        db.add(res)
-        
-        # Calculate Inflow
-        inflow = res_telemetry["inflow"] if res_telemetry["inflow"] is not None else inflow_added
-        
-        # Outflow calculation based on dam capacity levels
-        pct = (res.current_level / res.capacity) * 100
-        if pct >= 100:
-            outflow = 8.5
-        elif pct >= 90:
-            outflow = 4.5
-        elif pct >= 75:
-            outflow = 2.5
-        elif pct >= 50:
-            outflow = 1.2
-        else:
-            outflow = 0.4
-            
-        if res_telemetry["outflow"] is not None:
-            outflow = res_telemetry["outflow"]
-            
-        # Log to ReservoirHistory snapshot table
-        from app.models.models import ReservoirHistory
-        res_history = ReservoirHistory(
-            reservoir_id=res.id,
-            water_level=res.current_level,
-            inflow=inflow,
-            outflow=outflow,
-            recorded_at=datetime.now()
-        )
-        db.add(res_history)
-        
-    db.commit()
-    print("Dams levels, outflow updates, and history logging synced.")
-    
-    # 2. Update Villages & ML predictions
-    villages = db.query(Village).all()
-    for v in villages:
-        lat = v.latitude
-        lon = v.longitude
-        
-        # Query Open-Meteo current rain, temp, and other parameters
-        w_url = "https://api.open-meteo.com/v1/forecast"
-        w_params = {
-            "latitude": lat,
-            "longitude": lon,
-            "current": "precipitation,temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,cloud_cover,visibility,weather_code",
-            "timezone": "auto"
-        }
-        
-        rain = 0.0
-        temp = 25.0
-        humidity = 50.0
-        pressure = 1013.25
-        wind_speed = 10.0
-        cloud_cover = 0.0
-        visibility = 10.0
-        weather_code = 0
-        try:
-            resp = requests.get(w_url, params=w_params, timeout=5)
-            if resp.ok:
-                current = resp.json().get("current", {})
-                rain = current.get("precipitation", 0.0) or 0.0
-                temp = current.get("temperature_2m", 25.0)
-                humidity = current.get("relative_humidity_2m", 50.0)
-                pressure = current.get("surface_pressure", 1013.25)
-                wind_speed = current.get("wind_speed_10m", 10.0)
-                cloud_cover = current.get("cloud_cover", 0.0)
-                visibility = (current.get("visibility", 10000.0) or 10000.0) / 1000.0
-                weather_code = current.get("weather_code", 0)
-        except Exception as e:
-            print(f"Error querying weather for village {v.name}: {str(e)}")
-            
-        # Log to WeatherHistory
-        from app.models.models import WeatherHistory
-        
-        def get_code_text(code: int) -> str:
-            mapping = {
-                0: "Clear Sky", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
-                45: "Foggy", 48: "Depositing Rime Fog", 51: "Light Drizzle", 53: "Moderate Drizzle",
-                55: "Dense Drizzle", 61: "Light Rain", 63: "Moderate Rain", 65: "Heavy Rain",
-                71: "Light Snow", 73: "Moderate Snow", 75: "Heavy Snow", 80: "Light Showers",
-                81: "Moderate Showers", 82: "Violent Showers", 95: "Thunderstorm", 96: "Thunderstorm with Hail"
-            }
-            return mapping.get(code, "Cloudy")
-            
-        w_history = WeatherHistory(
-            location_name=v.name,
-            latitude=lat,
-            longitude=lon,
-            temperature=temp,
-            humidity=humidity,
-            pressure=pressure,
-            rainfall=rain,
-            wind_speed=wind_speed,
-            cloud_cover=cloud_cover,
-            visibility=visibility,
-            condition=get_code_text(weather_code)
-        )
-        db.add(w_history)
-            
-        # Groundwater level calculation: rain recharges, default consumption lowers it
-        latest_gw = db.query(GroundwaterRecord).filter(GroundwaterRecord.village_id == v.id).order_by(GroundwaterRecord.measurement_date.desc()).first()
-        current_depth = latest_gw.depth if latest_gw else 12.5
-        
-        # Recharge decreases depth (brings level closer to surface); usage increases depth
-        recharge = rain * 0.05
-        usage = 0.02
-        new_depth = max(1.0, current_depth + usage - recharge)
-        
-        # Save GroundwaterRecord
-        gw_status = "stable"
-        if new_depth > current_depth:
-            gw_status = "declining"
-        elif new_depth < current_depth:
-            gw_status = "improving"
-            
-        gw_record = GroundwaterRecord(
-            village_id=v.id,
-            measurement_date=datetime.now(),
-            depth=new_depth,
-            status=gw_status
-        )
-        db.add(gw_record)
-        
-        # Find nearest dam level as percentage
-        nearest_res = None
-        min_dist = float("inf")
-        for res in reservoirs:
-            dist = calculate_distance(lat, lon, res.latitude, res.longitude)
-            if dist < min_dist:
-                min_dist = dist
-                nearest_res = res
-                
-        dam_pct = 50.0
-        if nearest_res:
-            dam_pct = (nearest_res.current_level / nearest_res.capacity) * 100
-            
-        # Find nearest river to village
-        rivers_list = db.query(River).all()
-        nearest_riv = None
-        min_riv_dist = float("inf")
-        for riv in rivers_list:
-            dist = calculate_distance(lat, lon, riv.latitude, riv.longitude)
-            if dist < min_riv_dist:
-                min_riv_dist = dist
-                nearest_riv = riv
-                
-        riv_lvl = nearest_riv.river_level if nearest_riv else 3.5
-        danger_lvl = nearest_riv.danger_level if nearest_riv else 5.0
-        
-        # Run Water Crisis ML Predictor
-        result = predict_water_crisis(
-            rainfall=rain,
-            population=v.population or 5000,
-            reservoir_capacity=dam_pct,
-            groundwater_level=new_depth
-        )
-        
-        # Run Flood Predictor
-        flood_result = predict_flood_risk(
-            rainfall=rain,
-            river_level=riv_lvl,
-            danger_level=danger_lvl,
-            reservoir_capacity=dam_pct,
-            humidity=humidity,
-            cloud_cover=cloud_cover
-        )
-        
-        # Save Prediction Record
-        new_pred = Prediction(
-            village_id=v.id,
-            rainfall=rain,
-            population=v.population or 5000,
-            reservoir_capacity=dam_pct,
-            groundwater_level=new_depth,
-            risk_score=result["risk_score"],
-            risk_level=result["risk_level"],
-            flood_probability=flood_result["flood_probability"],
-            flood_severity=flood_result["flood_severity"],
-            confidence_score=flood_result["confidence_score"],
-            expected_impact=flood_result["expected_impact"],
-            prediction_date=datetime.now()
-        )
-        db.add(new_pred)
-        
-        # ----------------------------------------------------
-        # Intelligent Alert Engine Rules Evaluation
-        # ----------------------------------------------------
-        # Rule A: Compound Flood Alert (Rain + Dam + River Level)
-        if rain > 15.0 and dam_pct > 85.0 and riv_lvl >= danger_lvl:
-            alert_msg = f"🚨 CRITICAL FLASH FLOOD WARNING: {v.name} is under immediate threat! Regional rainfall is heavy ({rain}mm), nearest reservoir capacity is high ({round(dam_pct,1)}%), and the local river has breached danger levels ({riv_lvl}m / {danger_lvl}m)."
-            alert_type = "flood"
-            severity = "critical"
-        elif rain > 15.0 and dam_pct > 85.0:
-            alert_msg = f"⚠️ FLOOD THREAT WARNING: {v.name} regional indicators show active warnings. Heavy rainfall ({rain}mm) and saturated reservoir storage capacity ({round(dam_pct,1)}%) detected."
-            alert_type = "flood"
-            severity = "high"
-        elif riv_lvl >= danger_lvl:
-            alert_msg = f"🌊 RIVER OVERFLOW WARNING: Local river has crossed critical danger limits near {v.name} ({riv_lvl}m / {danger_lvl}m). Nearby lowlands face runoff pooling."
-            alert_type = "flood"
-            severity = "medium"
-            
-        # Rule B: Compound Drought/Scarcity Alert
-        elif rain == 0.0 and dam_pct < 25.0 and new_depth > 12.0:
-            alert_msg = f"🏜️ CRITICAL WATER CRISIS: {v.name} is facing compounding scarcity alerts. Nearest reservoir is depleted ({round(dam_pct,1)}%) and regional aquifer depth is low ({round(new_depth,2)}m)."
-            alert_type = "drought"
-            severity = "critical"
-        elif result["risk_level"] in ["High", "Moderate"]:
-            alert_msg = f"Critical Scarcity Risk: {v.name} is classified as {result['risk_level']} warning level due to low dam capacity ({round(dam_pct,1)}%) and falling aquifers ({round(new_depth, 2)}m)."
-            alert_type = "drought"
-            severity = "high" if result["risk_level"] == "High" else "medium"
-        else:
-            alert_msg = None
-            alert_type = None
-            severity = None
-            
-        if alert_msg:
-            # Check if this alert has already been raised today for this village
-            today_alert = db.query(Alert).filter(
-                Alert.village_id == v.id,
-                Alert.alert_type == alert_type,
-                Alert.created_at >= datetime.now().replace(hour=0, minute=0, second=0)
-            ).first()
-            
-            if not today_alert:
-                new_alert = Alert(
-                    village_id=v.id,
-                    alert_type=alert_type,
-                    severity=severity,
-                    message=alert_msg,
-                    is_read=False,
-                    data_source="AI Prediction Engine",
-                    issued_at=datetime.now(),
-                    created_at=datetime.now()
-                )
-                db.add(new_alert)
-                db.flush()
-                from app.services.notification_service import dispatch_alert_notifications
-                dispatch_alert_notifications(db, new_alert.id, village_id=v.id)
-                
-    # 3. Update Rivers & flow rates
-    rivers = db.query(River).all()
-    for r in rivers:
-        # Get latest rainfall near the river coordinates
-        nearest_res = None
-        min_dist = float("inf")
-        for res in reservoirs:
-            dist = calculate_distance(r.latitude, r.longitude, res.latitude, res.longitude)
-            if dist < min_dist:
-                min_dist = dist
-                nearest_res = res
-                
-        rain = 0.0
-        if nearest_res:
-            latest_rain = db.query(RainfallRecord).filter(
-                RainfallRecord.reservoir_id == nearest_res.id
-            ).order_by(RainfallRecord.measurement_date.desc()).first()
-            if latest_rain:
-                rain = latest_rain.rainfall_amount
-                
-        # Calculate fallback simulated values
-        if rain > 15.0:
-            fallback_trend = "Rising"
-            fallback_level = round(r.river_level + (rain * 0.08), 2)
-            fallback_flow = round(r.flow_rate + (rain * 25.0), 2)
-        else:
-            fallback_trend = "Falling"
-            base_level = 3.0
-            if "yamuna" in r.name.lower():
-                base_level = 2.0
-            elif "godavari" in r.name.lower():
-                base_level = 4.0
-            elif "ganges" in r.name.lower():
-                base_level = 5.0
-                
-            fallback_level = max(base_level, round(r.river_level - 0.05, 2))
-            fallback_flow = max(150.0, round(r.flow_rate - 15.0, 2))
-            
-        # Query River Provider
-        riv_telemetry = river_prov.get_river_gauge(
-            r.name, r.latitude, r.longitude, fallback_level, fallback_flow, fallback_trend
-        )
-        
-        r.river_level = riv_telemetry["river_level"]
-        r.flow_rate = riv_telemetry["flow_rate"]
-        r.trend = riv_telemetry["trend"]
-        r.data_source = riv_telemetry["data_source"]
-        r.data_status = riv_telemetry["data_status"]
-        r.last_updated_at = datetime.now()
-        db.add(r)
-        
-        # Trigger River Flood Alert check
-        if r.river_level >= r.danger_level:
-            alert_msg = f"🌊 River Flood Alert: {r.name.upper()} has breached the critical danger level! Current: {r.river_level}m (Danger mark: {r.danger_level}m, Flow rate: {r.flow_rate} m3/s)."
-            
-            today_alert = db.query(Alert).filter(
-                Alert.alert_type == "flood",
-                Alert.message.like(f"%{r.name.upper()}%"),
-                Alert.created_at >= datetime.now().replace(hour=0, minute=0, second=0)
-            ).first()
-            
-            if not today_alert:
-                new_alert = Alert(
-                    alert_type="flood",
-                    severity="high",
-                    message=alert_msg,
-                    is_read=False,
-                    data_source="Central Water Commission (CWC)",
-                    issued_at=datetime.now(),
-                    created_at=datetime.now()
-                )
-                db.add(new_alert)
-                
-        # Log to RiverHistory table
-        from app.models.models import RiverHistory
-        r_history = RiverHistory(
-            river_id=r.id,
-            river_level=r.river_level,
-            flow_rate=r.flow_rate,
-            trend=r.trend,
-            recorded_at=datetime.now()
-        )
-        db.add(r_history)
+logger = logging.getLogger(__name__)
+LOCK_NAME = "global_data_sync"
+LOCK_TTL_SECONDS = 600  # 10 minutes TTL for restart / crash recovery
 
-    # 4. Integrate Government/Official Alerts
+
+def _fetch_with_bounded_retry(url: str, params: dict, timeout: int = 8, max_retries: int = 2) -> Optional[dict]:
+    """Execute HTTP GET with bounded retries and backoff for remote providers."""
+    for attempt in range(1, max_retries + 1):
+        try:
+            resp = requests.get(url, params=params, timeout=timeout)
+            if resp.ok:
+                return resp.json()
+            logger.warning(f"Upstream provider returned HTTP {resp.status_code} on attempt {attempt}/{max_retries}")
+        except Exception as e:
+            logger.warning(f"Upstream attempt {attempt}/{max_retries} failed: {e}")
+            if attempt < max_retries:
+                time.sleep(1)
+    return None
+
+
+def _acquire_db_lock(db: Session, worker_id: str) -> bool:
+    """Acquire database-backed lock across multi-process workers/replicas with restart recovery."""
     try:
-        official_alerts = alert_prov.fetch_official_alerts()
-        for off_alert in official_alerts:
-            # Check if this alert has already been raised today
-            today_alert = db.query(Alert).filter(
-                Alert.alert_type == off_alert["alert_type"],
-                Alert.data_source == off_alert["data_source"],
-                Alert.message == off_alert["message"],
-                Alert.created_at >= datetime.now().replace(hour=0, minute=0, second=0)
-            ).first()
-            
-            if not today_alert:
-                new_alert = Alert(
-                    alert_type=off_alert["alert_type"],
-                    severity=off_alert["severity"],
-                    message=off_alert["message"],
-                    is_read=False,
-                    data_source=off_alert["data_source"],
-                    affected_locations=off_alert["affected_locations"],
-                    issued_at=datetime.now(),
-                    created_at=datetime.now()
-                )
-                db.add(new_alert)
-    except Exception as e:
-        print(f"Error compiling official alerts: {str(e)}")
+        now = datetime.utcnow()
+        lock_rec = db.query(SyncLock).filter(SyncLock.lock_name == LOCK_NAME).first()
+        if not lock_rec:
+            lock_rec = SyncLock(
+                lock_name=LOCK_NAME,
+                is_locked=True,
+                locked_at=now,
+                locked_by=worker_id,
+            )
+            db.add(lock_rec)
+            db.commit()
+            return True
 
-    db.commit()
-    print("Villages, dams, rivers telemetry, ML models inference, official feeds, and alerts synced.")
-    
-    # Broadcast event via WebSocket
-    await manager.broadcast({
-        "event": "sync_complete",
-        "timestamp": datetime.now().isoformat(),
-        "message": "Live satellite telemetry check complete. All models recalculated."
-    })
-    print("===== DATA SYNC PIPELINE RUN COMPLETED =====")
+        if lock_rec.is_locked:
+            lock_time = lock_rec.locked_at
+            if lock_time and lock_time.tzinfo:
+                lock_time = lock_time.replace(tzinfo=None)
+            age = (now - lock_time).total_seconds() if lock_time else 999999
+            if age < LOCK_TTL_SECONDS:
+                logger.warning(f"Sync lock held by {lock_rec.locked_by} (age {round(age)}s). Skipping across workers.")
+                return False
+            # Stale lock from restart/crash: recover
+            logger.warning(f"Recovering expired sync lock from {lock_rec.locked_by} (age {round(age)}s).")
+            lock_rec.is_locked = True
+            lock_rec.locked_at = now
+            lock_rec.locked_by = worker_id
+            db.commit()
+            return True
+        else:
+            lock_rec.is_locked = True
+            lock_rec.locked_at = now
+            lock_rec.locked_by = worker_id
+            db.commit()
+            return True
+    except Exception as e:
+        logger.warning(f"DB lock check exception (falling back to process lock): {e}")
+        return True
+
+
+def _release_db_lock(db: Session, worker_id: str, success: bool = True):
+    """Release database-backed lock and record persistent last_success timestamp."""
+    try:
+        lock_rec = db.query(SyncLock).filter(SyncLock.lock_name == LOCK_NAME).first()
+        if lock_rec and lock_rec.locked_by == worker_id:
+            lock_rec.is_locked = False
+            lock_rec.locked_at = None
+            lock_rec.last_success = datetime.utcnow()
+            db.commit()
+    except Exception as e:
+        logger.warning(f"DB lock release exception: {e}")
+
+
+# Global concurrency lock to prevent overlapping sync runs within worker
+_SYNC_LOCK = asyncio.Lock()
+
+# Source run timestamps for cadence control
+_LAST_SOURCE_RUNS: Dict[str, Optional[datetime]] = {
+    "open_meteo": None,
+    "gdacs_alerts": None,
+    "cwc_bulletin": None,
+}
+
+# In-memory diagnostics tracker (safe for fast API inspection without secret leak)
+SYNC_DIAGNOSTICS: Dict[str, Any] = {
+    "is_running": False,
+    "last_run_started_at": None,
+    "last_run_completed_at": None,
+    "last_run_status": "NEVER_RUN",
+    "total_runs": 0,
+    "failed_runs": 0,
+    "source_status": {
+        "open_meteo": {"last_success": None, "last_error": None, "records_updated": 0, "last_run_attempt": None},
+        "gdacs_alerts": {"last_success": None, "last_error": None, "records_updated": 0, "last_run_attempt": None},
+        "cwc_bulletin": {"last_success": None, "last_error": None, "records_updated": 0, "last_run_attempt": None},
+    },
+    "last_error": None,
+}
+
+
+def get_sync_diagnostics(db: Optional[Session] = None) -> Dict[str, Any]:
+    """Return diagnostic telemetry status for monitoring and health endpoints with persistent DB state."""
+    diag = dict(SYNC_DIAGNOSTICS)
+    diag["is_running"] = _SYNC_LOCK.locked()
+    if db is not None:
+        try:
+            lock_rec = db.query(SyncLock).filter(SyncLock.lock_name == LOCK_NAME).first()
+            if lock_rec:
+                if lock_rec.is_locked:
+                    diag["is_running"] = True
+                if lock_rec.last_success:
+                    diag["last_persistent_success"] = lock_rec.last_success.isoformat()
+                    if not diag.get("last_run_completed_at"):
+                        diag["last_run_completed_at"] = lock_rec.last_success.isoformat()
+        except Exception:
+            pass
+    return diag
+
+
+async def execute_scheduled_sync(
+    db: Session,
+    run_cwc_bulletin: bool = False,
+    force_all: bool = False,
+) -> Dict[str, Any]:
+    """
+    Execute synchronization with concurrency guards, source timeouts, cadences, and diagnostic tracking.
+    """
+    global SYNC_DIAGNOSTICS, _LAST_SOURCE_RUNS
+    if _SYNC_LOCK.locked():
+        logger.warning("Scheduled sync attempted while another sync run is active. Skipping concurrent execution.")
+        return {"status": "SKIPPED_CONCURRENT", "reason": "process_lock", "timestamp": datetime.utcnow().isoformat()}
+
+    worker_id = f"worker_{os.getpid()}"
+    if not _acquire_db_lock(db, worker_id):
+        return {"status": "SKIPPED_CONCURRENT", "reason": "cross_worker_db_lock", "timestamp": datetime.utcnow().isoformat()}
+
+    async with _SYNC_LOCK:
+        start_time = datetime.utcnow()
+        SYNC_DIAGNOSTICS["is_running"] = True
+        SYNC_DIAGNOSTICS["last_run_started_at"] = start_time.isoformat()
+        SYNC_DIAGNOSTICS["total_runs"] += 1
+        
+        run_errors = []
+        records_summary = {"weather": 0, "alerts": 0, "cwc": 0}
+
+        try:
+            logger.info("===== STARTING DATA SYNC ENGINE (GUARDED RUN) =====")
+            dam_prov = DamProvider()
+            river_prov = RiverProvider()
+            alert_prov = AlertProvider()
+
+            # Cadence evaluation (seconds):
+            # Open-Meteo Weather: 15 minutes (900s)
+            # GDACS Alerts: 30 minutes (1800s)
+            # CWC Bulletin: 12 hours (43200s)
+            should_run_weather = (
+                force_all
+                or _LAST_SOURCE_RUNS["open_meteo"] is None
+                or (start_time - _LAST_SOURCE_RUNS["open_meteo"]).total_seconds() >= 900
+            )
+            should_run_alerts = (
+                force_all
+                or _LAST_SOURCE_RUNS["gdacs_alerts"] is None
+                or (start_time - _LAST_SOURCE_RUNS["gdacs_alerts"]).total_seconds() >= 1800
+            )
+            should_run_cwc = (
+                force_all
+                or run_cwc_bulletin
+                or _LAST_SOURCE_RUNS["cwc_bulletin"] is None
+                or (start_time - _LAST_SOURCE_RUNS["cwc_bulletin"]).total_seconds() >= 43200
+            )
+
+            # -------------------------------------------------------------
+            # 1. Sync Reservoirs and Open-Meteo Current Precipitation
+            # -------------------------------------------------------------
+            if should_run_weather:
+                _LAST_SOURCE_RUNS["open_meteo"] = start_time
+                SYNC_DIAGNOSTICS["source_status"]["open_meteo"]["last_run_attempt"] = start_time.isoformat()
+                try:
+                    reservoirs = db.query(Reservoir).all()
+                    for res in reservoirs:
+                        lat = res.latitude or 0.0
+                        lon = res.longitude or 0.0
+                        
+                        w_url = "https://api.open-meteo.com/v1/forecast"
+                        w_params = {
+                            "latitude": lat,
+                            "longitude": lon,
+                            "current": "precipitation",
+                            "timezone": "auto"
+                        }
+                        
+                        rain = 0.0
+                        obs_time = datetime.utcnow()
+                        cur_json = _fetch_with_bounded_retry(w_url, params=w_params, timeout=8, max_retries=2)
+                        if cur_json:
+                            cur = cur_json.get("current", {})
+                            rain = float(cur.get("precipitation", 0.0) or 0.0)
+                            if "time" in cur:
+                                try:
+                                    obs_time = datetime.fromisoformat(cur["time"])
+                                except Exception:
+                                    obs_time = datetime.utcnow()
+                        
+                        # Store observation with actual observation timestamp and non-negative validation
+                        valid_rain = max(0.0, rain)
+                        # Check duplicate within 15-minute window for same reservoir
+                        recent_record = (
+                            db.query(RainfallRecord)
+                            .filter(
+                                RainfallRecord.reservoir_id == res.id,
+                                RainfallRecord.measurement_date >= obs_time - timedelta(minutes=15),
+                                RainfallRecord.measurement_date <= obs_time + timedelta(minutes=15),
+                            )
+                            .first()
+                        )
+                        if not recent_record:
+                            rain_rec = RainfallRecord(
+                                reservoir_id=res.id,
+                                district=res.district,
+                                measurement_date=obs_time,
+                                rainfall_amount=valid_rain,
+                            )
+                            db.add(rain_rec)
+                            records_summary["weather"] += 1
+
+                        # Local hydrological estimation fallback
+                        inflow_added = valid_rain * 0.35
+                        fallback_level = min(res.capacity, res.current_level + inflow_added)
+                        res_telemetry = dam_prov.get_reservoir_level(res.name, lat, lon, fallback_level)
+                        
+                        res.current_level = res_telemetry["water_level"]
+                        res.data_source = res_telemetry["data_source"]
+                        res.data_status = res_telemetry["data_status"]
+                        res.last_updated_at = datetime.utcnow()
+                        db.add(res)
+
+                        pct = (res.current_level / res.capacity) * 100
+                        outflow = 8.5 if pct >= 100 else 4.5 if pct >= 90 else 2.5 if pct >= 75 else 1.2 if pct >= 50 else 0.4
+                        
+                        res_history = ReservoirHistory(
+                            reservoir_id=res.id,
+                            water_level=res.current_level,
+                            inflow=inflow_added,
+                            outflow=outflow,
+                            recorded_at=datetime.utcnow()
+                        )
+                        db.add(res_history)
+                    
+                    db.commit()
+                    SYNC_DIAGNOSTICS["source_status"]["open_meteo"]["last_success"] = datetime.utcnow().isoformat()
+                    SYNC_DIAGNOSTICS["source_status"]["open_meteo"]["records_updated"] += records_summary["weather"]
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Error during reservoir sync: {e}")
+                    run_errors.append(f"Reservoir/Weather: {str(e)}")
+                    SYNC_DIAGNOSTICS["source_status"]["open_meteo"]["last_error"] = str(e)
+
+            # -------------------------------------------------------------
+            # 2. Sync Rivers Telemetry
+            # -------------------------------------------------------------
+            try:
+                rivers = db.query(River).all()
+                for r in rivers:
+                    riv_telemetry = river_prov.get_river_gauge(
+                        r.name, r.latitude or 0.0, r.longitude or 0.0, r.river_level, r.flow_rate, r.trend
+                    )
+                    r.river_level = riv_telemetry["river_level"]
+                    r.flow_rate = riv_telemetry["flow_rate"]
+                    r.trend = riv_telemetry["trend"]
+                    r.data_source = riv_telemetry["data_source"]
+                    r.data_status = riv_telemetry["data_status"]
+                    r.last_updated_at = datetime.utcnow()
+                    db.add(r)
+
+                    r_history = RiverHistory(
+                        river_id=r.id,
+                        river_level=r.river_level,
+                        flow_rate=r.flow_rate,
+                        trend=r.trend,
+                        recorded_at=datetime.utcnow()
+                    )
+                    db.add(r_history)
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Error during river sync: {e}")
+                run_errors.append(f"River: {str(e)}")
+
+            # -------------------------------------------------------------
+            # 3. Sync Official Disaster Alerts (GDACS & Official Bulletins)
+            # -------------------------------------------------------------
+            if should_run_alerts:
+                _LAST_SOURCE_RUNS["gdacs_alerts"] = start_time
+                SYNC_DIAGNOSTICS["source_status"]["gdacs_alerts"]["last_run_attempt"] = start_time.isoformat()
+                try:
+                    from app.services.flood_intelligence_service import flood_intelligence_service
+                    sync_res = flood_intelligence_service.sync_official_warnings(db=db)
+                    records_summary["alerts"] = sync_res.get("ingested", 0) + sync_res.get("updated", 0)
+                    SYNC_DIAGNOSTICS["source_status"]["gdacs_alerts"]["last_success"] = datetime.utcnow().isoformat()
+                    SYNC_DIAGNOSTICS["source_status"]["gdacs_alerts"]["records_updated"] += records_summary["alerts"]
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"Error during official alert sync: {e}")
+                    run_errors.append(f"Official Alerts: {str(e)}")
+                    SYNC_DIAGNOSTICS["source_status"]["gdacs_alerts"]["last_error"] = str(e)
+
+            # -------------------------------------------------------------
+            # 4. CWC Weekly Storage Bulletin (Triggered on Cadence)
+            # -------------------------------------------------------------
+            if should_run_cwc:
+                _LAST_SOURCE_RUNS["cwc_bulletin"] = start_time
+                SYNC_DIAGNOSTICS["source_status"]["cwc_bulletin"]["last_run_attempt"] = start_time.isoformat()
+                try:
+                    from app.services.cwc_reservoir_ingest import ingest_cwc_bulletin
+                    cwc_res = ingest_cwc_bulletin(db)
+                    records_summary["cwc"] = cwc_res.get("inserted", 0)
+                    SYNC_DIAGNOSTICS["source_status"]["cwc_bulletin"]["last_success"] = datetime.utcnow().isoformat()
+                    SYNC_DIAGNOSTICS["source_status"]["cwc_bulletin"]["records_updated"] += records_summary["cwc"]
+                except Exception as e:
+                    logger.error(f"Error during CWC bulletin sync: {e}")
+                    run_errors.append(f"CWC: {str(e)}")
+                    SYNC_DIAGNOSTICS["source_status"]["cwc_bulletin"]["last_error"] = str(e)
+
+            # -------------------------------------------------------------
+            # 5. Evaluate Intelligent Assessment Rules (Prompt 15)
+            # -------------------------------------------------------------
+            try:
+                from app.services.alert_service import alert_service
+                eval_res = alert_service.evaluate_all_rules(db=db)
+                logger.info(f"Evaluated intelligent alert rules: {eval_res}")
+            except Exception as e:
+                logger.error(f"Error evaluating intelligent alerts: {e}")
+                run_errors.append(f"Alert Rules: {str(e)}")
+
+            # Broadcast completion to WebSocket clients
+            try:
+                await manager.broadcast({
+                    "event": "sync_complete",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "summary": records_summary,
+                })
+            except Exception:
+                pass
+
+            completed_time = datetime.utcnow()
+            SYNC_DIAGNOSTICS["is_running"] = False
+            SYNC_DIAGNOSTICS["last_run_completed_at"] = completed_time.isoformat()
+            if run_errors:
+                SYNC_DIAGNOSTICS["last_run_status"] = "COMPLETED_WITH_WARNINGS"
+                SYNC_DIAGNOSTICS["last_error"] = "; ".join(run_errors)
+            else:
+                SYNC_DIAGNOSTICS["last_run_status"] = "SUCCESS"
+                SYNC_DIAGNOSTICS["last_error"] = None
+
+            _release_db_lock(db, worker_id, success=(len(run_errors) == 0))
+            return {
+                "status": SYNC_DIAGNOSTICS["last_run_status"],
+                "started_at": start_time.isoformat(),
+                "completed_at": completed_time.isoformat(),
+                "records_summary": records_summary,
+                "warnings": run_errors,
+            }
+
+        except Exception as e:
+            _release_db_lock(db, worker_id, success=False)
+            SYNC_DIAGNOSTICS["is_running"] = False
+            SYNC_DIAGNOSTICS["failed_runs"] += 1
+            SYNC_DIAGNOSTICS["last_run_status"] = "FAILED"
+            SYNC_DIAGNOSTICS["last_error"] = str(e)
+            logger.error(f"Fatal sync runner failure: {e}", exc_info=True)
+            return {"status": "FAILED", "error": str(e)}
+
+
+async def sync_all_data(db: Session):
+    """Backwards-compatible wrapper calling the guarded sync engine."""
+    await execute_scheduled_sync(db, run_cwc_bulletin=False)

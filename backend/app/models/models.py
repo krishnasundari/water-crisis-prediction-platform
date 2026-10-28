@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, Boolean, Text, Enum
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, Boolean, Text, Enum, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -69,6 +69,10 @@ class Village(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     created_by_user = relationship("User", back_populates="villages")
+    __table_args__ = (
+        Index("ix_villages_district_state", "district", "state"),
+    )
+
     groundwater_records = relationship("GroundwaterRecord", back_populates="village")
     predictions = relationship("Prediction", back_populates="village")
 
@@ -78,8 +82,8 @@ class Reservoir(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False, index=True)
-    capacity = Column(Float, nullable=False)  # Million cubic meters
-    current_level = Column(Float, nullable=False)
+    capacity = Column(Float, nullable=False)  # Live capacity in Million Cubic Metres (MCM)
+    current_level = Column(Float, nullable=False)  # Live storage level in Million Cubic Metres (MCM)
     district = Column(String(100), nullable=False, index=True)
     state = Column(String(100), nullable=False)
     latitude = Column(Float)
@@ -90,6 +94,10 @@ class Reservoir(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
+    __table_args__ = (
+        Index("ix_reservoirs_district_state", "district", "state"),
+    )
+
     rainfall_records = relationship("RainfallRecord", back_populates="reservoir")
     forecasts = relationship("Forecast", back_populates="reservoir")
 
@@ -104,6 +112,10 @@ class RainfallRecord(Base):
     rainfall_amount = Column(Float, nullable=False)  # mm
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
+    __table_args__ = (
+        Index("ix_rainfall_records_res_date", "reservoir_id", "measurement_date"),
+    )
+
     reservoir = relationship("Reservoir", back_populates="rainfall_records")
 
 # Groundwater Record Model
@@ -162,19 +174,39 @@ class Alert(Base):
     __tablename__ = "alerts"
     
     id = Column(Integer, primary_key=True)
-    village_id = Column(Integer, ForeignKey("villages.id"))
-    reservoir_id = Column(Integer, ForeignKey("reservoirs.id"))
-    alert_type = Column(String(50), nullable=False)  # risk, reservoir, groundwater
+    village_id = Column(Integer, ForeignKey("villages.id"), nullable=True)
+    reservoir_id = Column(Integer, ForeignKey("reservoirs.id"), nullable=True)
+    river_id = Column(Integer, ForeignKey("rivers.id"), nullable=True)
+    alert_type = Column(String(50), nullable=False)  # risk, reservoir, groundwater, flood, official_warning, drought
     severity = Column(String(20), nullable=False)
     message = Column(Text, nullable=False)
     is_read = Column(Boolean, default=False)
-    created_by = Column(Integer, ForeignKey("users.id"))
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     data_source = Column(String(100), default="AI Prediction Engine")
     issued_at = Column(DateTime(timezone=True), server_default=func.now())
     affected_locations = Column(String(255), nullable=True)
+
+    # Prompt 14 & 15 Intelligence & Official Warning Enhancements
+    status = Column(String(30), default="active", nullable=False)  # active, acknowledged, resolved, expired
+    is_official = Column(Boolean, default=False, nullable=False)   # True for government/authorized agency warnings
+    issuing_authority = Column(String(100), nullable=True)         # e.g., "GDACS", "Central Water Commission", "IMD"
+    source_identifier = Column(String(100), nullable=True)         # External event ID
+    trigger_reason = Column(Text, nullable=True)                   # Documented rationale / rule that triggered the alert
+    valid_until = Column(DateTime(timezone=True), nullable=True)   # Timestamp after which warning is expired
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+    acknowledged_by = Column(String(100), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_by = Column(String(100), nullable=True)
+    resolution_notes = Column(Text, nullable=True)
+    telemetry_snapshot = Column(Text, nullable=True)               # Serialized telemetry state at trigger time
+    status_history = Column(Text, nullable=True)                   # Audit log of state transitions
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     created_by_user = relationship("User", back_populates="alerts")
+    village = relationship("Village")
+    reservoir = relationship("Reservoir")
+    river = relationship("River")
 
 # Report Model
 class Report(Base):
@@ -234,11 +266,15 @@ class ReservoirHistory(Base):
     
     id = Column(Integer, primary_key=True)
     reservoir_id = Column(Integer, ForeignKey("reservoirs.id"), nullable=False)
-    water_level = Column(Float, nullable=False)
+    water_level = Column(Float, nullable=False)  # Live storage volume in Million Cubic Metres (MCM)
     inflow = Column(Float)
     outflow = Column(Float)
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())
     
+    __table_args__ = (
+        Index("ix_reservoir_history_res_date", "reservoir_id", "recorded_at"),
+    )
+
     reservoir = relationship("Reservoir")
 
 # River Model
@@ -247,9 +283,9 @@ class River(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
-    river_level = Column(Float, nullable=False) # Current level in meters
-    danger_level = Column(Float, nullable=False) # Danger level in meters
-    flow_rate = Column(Float, nullable=False) # Flow rate in m3/s
+    river_level = Column(Float, nullable=False)  # Current level in metres (m)
+    danger_level = Column(Float, nullable=False)  # Danger level in metres (m)
+    flow_rate = Column(Float, nullable=False)  # Discharge rate in cubic metres per second (m3/s)
     trend = Column(String(20), default="Steady") # "Rising", "Falling", "Steady"
     latitude = Column(Float)
     longitude = Column(Float)
@@ -270,6 +306,10 @@ class RiverHistory(Base):
     trend = Column(String(20), nullable=False)
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())
     
+    __table_args__ = (
+        Index("ix_river_history_riv_date", "river_id", "recorded_at"),
+    )
+
     river = relationship("River")
 
 # Notification Logs Model
@@ -284,3 +324,14 @@ class NotificationLog(Base):
     destination = Column(String(100), nullable=False)
     status = Column(String(20), default="delivered")
     sent_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# Synchronization Lock & State Model (Distributed across workers & replicas)
+class SyncLock(Base):
+    __tablename__ = "sync_locks"
+    
+    lock_name = Column(String(50), primary_key=True)
+    is_locked = Column(Boolean, default=False, nullable=False)
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    locked_by = Column(String(100), nullable=True)
+    last_success = Column(DateTime(timezone=True), nullable=True)

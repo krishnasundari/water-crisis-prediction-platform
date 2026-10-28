@@ -9,6 +9,11 @@ from app.schemas.schemas import PredictionRequest
 
 # ML Predictor
 from app.ml.models.predictor import predict_water_crisis, predict_flood_risk
+from app.ml.water_shortage_pipeline import (
+    validate_inference_inputs,
+    compute_hydrological_vulnerability_index,
+    water_shortage_forecaster,
+)
 
 router = APIRouter()
 
@@ -31,6 +36,16 @@ def create_prediction(
     population = prediction.population or 0
     reservoir_capacity = prediction.reservoir_capacity or 0
     groundwater_level = prediction.groundwater_level or 0
+
+    # Validate physical bounds
+    is_valid, err_msg = validate_inference_inputs(
+        rainfall=rainfall,
+        population=population,
+        reservoir_capacity=reservoir_capacity,
+        groundwater_level=groundwater_level,
+    )
+    if not is_valid:
+        raise HTTPException(status_code=422, detail=err_msg)
 
     # -------------------------------
     # ML Prediction
@@ -182,6 +197,61 @@ import requests
 from app.services.weather_service import calculate_distance, get_weather_code_description
 from app.models.models import Reservoir
 from app.ml.models.predictor import predict_water_crisis
+
+
+
+@router.get("/reservoir-shortage/{reservoir_id}")
+def get_reservoir_shortage(
+    reservoir_id: int,
+    horizon_days: int = 7,
+    db: Session = Depends(get_db),
+):
+    """
+    7-day forward reservoir storage depletion forecast.
+    Includes uncertainty interval (90% confidence), persistence baseline comparison,
+    and returns 'insufficient_data' when historical observations are inadequate.
+    """
+    result = water_shortage_forecaster.predict_reservoir_storage(
+        db=db,
+        reservoir_id=reservoir_id,
+        horizon_days=horizon_days,
+    )
+    if result.get("status") == "error":
+        raise HTTPException(status_code=404, detail=result.get("message"))
+    return result
+
+
+@router.get("/vulnerability-index/{reservoir_id}")
+def get_reservoir_vulnerability(
+    reservoir_id: int,
+    population: int = 5000,
+    db: Session = Depends(get_db),
+):
+    """
+    Transparent deterministic Hydrological Vulnerability Index (HVI)
+    based on precipitation deficit, storage depletion, and LPCD demand pressure.
+    """
+    from app.models.models import Reservoir, RainfallRecord
+    from datetime import timedelta
+    res = db.query(Reservoir).filter(Reservoir.id == reservoir_id).first()
+    if not res:
+        raise HTTPException(status_code=404, detail="Reservoir not found")
+
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    recent_rain = db.query(RainfallRecord).filter(
+        RainfallRecord.reservoir_id == reservoir_id,
+        RainfallRecord.measurement_date >= thirty_days_ago
+    ).all()
+    rain_30d = sum(r.rainfall_amount for r in recent_rain) if recent_rain else 0.0
+    normal_rain_30d = 50.0  # benchmark normal 30-day rainfall (mm)
+
+    return compute_hydrological_vulnerability_index(
+        rainfall_30d=rain_30d,
+        normal_rainfall_30d=normal_rain_30d,
+        current_storage_mcm=res.current_level,
+        capacity_mcm=res.capacity,
+        population=population,
+    )
 
 @router.get("/disaster/live")
 def get_live_disaster_prediction(query: str, db: Session = Depends(get_db)):

@@ -35,27 +35,30 @@ def dispatch_alert_notifications(db: Session, alert_id: int, village_id: int = N
         }
     ]
 
-    # 3. Simulate SMS & Email carriers logging
+    from app.core.config import settings
+    # Safety Gate: Never send live public emergency notifications in development/testing
+    is_live = getattr(settings, "ENABLE_PUBLIC_EMERGENCY_NOTIFICATIONS", False)
+    status_label = "delivered" if is_live else "dev_simulated"
+
+    # 3. Stakeholder notification log
     for s in stakeholders:
-        # SMS Log
         sms_log = NotificationLog(
             alert_id=alert_id,
             recipient_name=s["name"],
             recipient_role=s["role"],
             channel="sms",
             destination=s["phone"],
-            status="delivered"
+            status=status_label
         )
         db.add(sms_log)
 
-        # Email Log
         email_log = NotificationLog(
             alert_id=alert_id,
             recipient_name=s["name"],
             recipient_role=s["role"],
             channel="email",
             destination=s["email"],
-            status="delivered"
+            status=status_label
         )
         db.add(email_log)
 

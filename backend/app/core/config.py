@@ -1,5 +1,10 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
+from pydantic import field_validator
+from typing import Optional, List, Union
+import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     """Application Settings - Load from .env file"""
@@ -22,8 +27,32 @@ class Settings(BaseSettings):
     JWT_EXPIRATION_MINUTES: int = 15
     JWT_REFRESH_EXPIRATION_DAYS: int = 7
     
-    # Security
-    CORS_ORIGINS: list = ["*"]
+    # Security - Explicit origins preferred over wildcard
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+        if isinstance(v, str):
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    return json.loads(v)
+                except Exception:
+                    pass
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
+
+    @property
+    def is_jwt_secret_secure(self) -> bool:
+        return (
+            self.JWT_SECRET_KEY != "your-super-secret-key-change-in-production"
+            and len(self.JWT_SECRET_KEY) >= 32
+        )
     
     # OpenAI Settings
     OPENAI_API_KEY: Optional[str] = None
@@ -38,6 +67,9 @@ class Settings(BaseSettings):
     SMTP_EMAIL: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     
+    # Initial Admin Seed Password (override via ADMIN_DEFAULT_PASSWORD env)
+    ADMIN_DEFAULT_PASSWORD: str = "Admin@123"
+
     # ML Settings
     ML_MODEL_PATH: str = "./ml_models"
     PREDICTION_CACHE_TTL: int = 86400  # 24 hours
@@ -45,6 +77,9 @@ class Settings(BaseSettings):
     # Pagination
     DEFAULT_PAGE_SIZE: int = 20
     MAX_PAGE_SIZE: int = 100
+
+    # Emergency Alert Safety Gate (Do not send public notifications in dev/test)
+    ENABLE_PUBLIC_EMERGENCY_NOTIFICATIONS: bool = False
     
     class Config:
         env_file = ".env"

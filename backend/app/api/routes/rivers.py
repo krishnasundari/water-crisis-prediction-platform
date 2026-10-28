@@ -4,6 +4,7 @@ from datetime import datetime
 
 from app.db.database import get_db
 from app.models.models import River, RiverHistory
+from app.core.freshness import determine_river_quality
 
 router = APIRouter()
 
@@ -25,6 +26,14 @@ def get_river_live_status(river_id: int, db: Session = Depends(get_db)):
         
     pct_danger = (river.river_level / river.danger_level) * 100
     
+    last_obs_time = getattr(river, "last_updated_at", None) or river.updated_at or river.created_at
+    quality = determine_river_quality(
+        data_source=getattr(river, "data_source", None),
+        last_updated_at=last_obs_time,
+        river_level=river.river_level,
+        danger_level=river.danger_level,
+    )
+
     return {
         "id": river.id,
         "name": river.name,
@@ -37,8 +46,11 @@ def get_river_live_status(river_id: int, db: Session = Depends(get_db)):
         "longitude": river.longitude,
         "data_source": getattr(river, "data_source", "Simulated Telemetry"),
         "data_status": getattr(river, "data_status", "Simulated"),
-        "last_updated_at": getattr(river, "last_updated_at", None) or river.updated_at or river.created_at or datetime.now(),
-        "last_updated": river.updated_at or river.created_at or datetime.now()
+        "quality_status": quality["quality_status"],
+        "is_stale": quality["is_stale"],
+        "freshness_warning": quality["warning"],
+        "last_updated_at": last_obs_time or datetime.utcnow(),
+        "last_updated": river.updated_at or river.created_at or datetime.utcnow()
     }
 
 @router.get("/{river_id}/history")

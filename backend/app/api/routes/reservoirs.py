@@ -77,6 +77,7 @@ def delete_reservoir(
 
 from datetime import datetime
 from app.models.models import ReservoirHistory, RainfallRecord
+from app.core.freshness import determine_reservoir_quality
 
 @router.get("/{reservoir_id}/live-status")
 def get_reservoir_live_status(reservoir_id: int, db: Session = Depends(get_db)):
@@ -120,6 +121,14 @@ def get_reservoir_live_status(reservoir_id: int, db: Session = Depends(get_db)):
     else:
         status = "Normal"
         
+    last_obs_time = getattr(res, "last_updated_at", None) or res.updated_at or res.created_at
+    quality = determine_reservoir_quality(
+        data_source=getattr(res, "data_source", None),
+        last_updated_at=last_obs_time,
+        current_level=res.current_level,
+        capacity=res.capacity,
+    )
+
     return {
         "id": res.id,
         "name": res.name,
@@ -135,8 +144,11 @@ def get_reservoir_live_status(reservoir_id: int, db: Session = Depends(get_db)):
         "longitude": res.longitude,
         "data_source": getattr(res, "data_source", "Estimated (Runoff Calculation)"),
         "data_status": getattr(res, "data_status", "Estimated"),
-        "last_updated_at": getattr(res, "last_updated_at", None) or res.updated_at or res.created_at or datetime.now(),
-        "last_updated": res.updated_at or res.created_at or datetime.now()
+        "quality_status": quality["quality_status"],
+        "is_stale": quality["is_stale"],
+        "freshness_warning": quality["warning"],
+        "last_updated_at": last_obs_time or datetime.utcnow(),
+        "last_updated": res.updated_at or res.created_at or datetime.utcnow()
     }
 
 @router.get("/{reservoir_id}/history")
