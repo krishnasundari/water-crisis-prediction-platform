@@ -86,17 +86,21 @@ export default function LoginPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            email,
-            password,
+            email: email.trim(),
+            password: password,
           }),
         }
       );
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         setLoading(false);
-        setError(data.detail || "Invalid email or password");
+        if (response.status === 429) {
+          setError("Too many login attempts. Please wait a minute and try again.");
+        } else {
+          setError(data.detail || "Invalid email or password");
+        }
         return;
       }
 
@@ -105,9 +109,9 @@ export default function LoginPage() {
 
       navigate("/dashboard");
     } catch (err) {
-      console.error(err);
+      console.error("Login request error:", err);
       setLoading(false);
-      setError("Unable to connect to server.");
+      setError("Unable to connect to server. Please check your internet connection.");
     }
 
     setLoading(false);
