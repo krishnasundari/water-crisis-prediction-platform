@@ -1,366 +1,143 @@
-# 🚀 Quick Deployment Guide - Get Live Link in 10 Minutes
+# 🚀 Production Deployment & Operations Guide
+## AI-Powered Water Crisis Prediction & Management Platform
 
-Choose your deployment platform and follow the steps:
-
----
-
-## **Option 1: Render.com** ⭐ (EASIEST & FREE)
-
-### Step 1: Push to GitHub
-
-```bash
-cd /path/to/project
-
-git init
-git add .
-git commit -m "Initial commit - Water Crisis Platform"
-git remote add origin https://github.com/YOUR_USERNAME/water-crisis-platform.git
-git push -u origin main
-```
-
-### Step 2: Deploy Backend on Render
-
-1. Go to **https://render.com**
-2. Sign up/Login with GitHub
-3. Click **"New +"** → **"Web Service"**
-4. Select your `water-crisis-platform` repository
-5. Fill in details:
-   - **Name**: `water-crisis-backend`
-   - **Branch**: `main`
-   - **Root Directory**: `backend`
-   - **Runtime**: `Python 3`
-   - **Build Command**: 
-     ```
-     pip install -r requirements.txt
-     ```
-   - **Start Command**: 
-     ```
-     gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
-     ```
-
-6. **Environment Variables** (Add these):
-   ```
-   DATABASE_URL=postgresql://water_user:water_password@YOUR_DB_URL:5432/water_crisis_db
-   REDIS_URL=redis://YOUR_REDIS_URL:6379/0
-   JWT_SECRET_KEY=your-super-secret-key-12345-change-this
-   DEBUG=False
-   ENVIRONMENT=production
-   CORS_ORIGINS=http://localhost,https://YOUR_FRONTEND_URL
-   OPENAI_API_KEY=sk-your-openai-key (optional)
-   ```
-
-7. Click **"Create Web Service"**
-8. Wait 2-3 minutes for deployment
-9. Get your backend URL: `https://water-crisis-backend.onrender.com`
-
-### Step 3: Deploy Database on Render
-
-1. Click **"New +"** → **"PostgreSQL"**
-2. Name: `water-crisis-db`
-3. Note the connection string
-4. Update backend environment variable: `DATABASE_URL`
-
-### Step 4: Deploy Frontend on Render
-
-1. Click **"New +"** → **"Static Site"**
-2. Select your repository
-3. Fill in:
-   - **Name**: `water-crisis-frontend`
-   - **Branch**: `main`
-   - **Root Directory**: `frontend`
-   - **Build Command**: `npm install && npm run build`
-   - **Publish Directory**: `dist`
-
-4. Add environment variable:
-   ```
-   VITE_API_URL=https://water-crisis-backend.onrender.com/api/v1
-   ```
-
-5. Click **"Create Static Site"**
-6. Get your frontend URL: `https://water-crisis-frontend.onrender.com`
-
-### ✅ Done! Your live links are:
-- **Frontend**: https://water-crisis-frontend.onrender.com
-- **Backend**: https://water-crisis-backend.onrender.com
-- **API Docs**: https://water-crisis-backend.onrender.com/docs
+This runbook covers the live production deployment on **Render.com**, containerized deployment via **Docker Compose**, and local development configuration.
 
 ---
 
-## **Option 2: Railway.app** (Simple & Fast)
+## 🌐 Live Production Links
 
-### Step 1: Install Railway CLI
+| Service | Live URL | Description |
+| :--- | :--- | :--- |
+| **Frontend Web App** | [water-crisis-platform-frontend.onrender.com](https://water-crisis-platform-frontend.onrender.com) | React 18 production client |
+| **Backend API** | [water-crisis-prediction-platform-1.onrender.com](https://water-crisis-prediction-platform-1.onrender.com) | FastAPI REST service |
+| **Interactive API Docs** | [Backend Swagger UI](https://water-crisis-prediction-platform-1.onrender.com/docs) | OpenAPI interactive documentation |
+| **ReDoc Documentation** | [Backend ReDoc](https://water-crisis-prediction-platform-1.onrender.com/redoc) | Alternative structured API docs |
+| **Health Check** | [API Health Endpoint](https://water-crisis-prediction-platform-1.onrender.com/health) | Uptime and heartbeat monitor |
 
-```bash
-npm install -g @railway/cli
-```
-
-### Step 2: Login & Initialize
-
-```bash
-railway login
-cd /path/to/project
-railway init
-```
-
-### Step 3: Configure Services
-
-```bash
-# Create railway.json in project root
-{
-  "services": {
-    "backend": {
-      "build": "./backend",
-      "port": 8000
-    },
-    "frontend": {
-      "build": "./frontend",
-      "port": 3000
-    }
-  }
-}
-```
-
-### Step 4: Deploy
-
-```bash
-railway up
-```
-
-### ✅ Get your URL:
-```bash
-railway open
-```
+**Demo Login**:
+- **Email**: `admin@water.gov`
+- **Password**: `Admin@123`
 
 ---
 
-## **Option 3: Vercel (Frontend Only)**
+## 1. Cloud Deployment (Render.com)
 
-### Step 1: Deploy Frontend
+The project includes a ready-to-use [`render.yaml`](./render.yaml) blueprint that configures both services automatically.
 
-```bash
-npm i -g vercel
-cd frontend
-vercel --prod
-```
-
-### Step 2: Update API URL
-
-In `.env.production`:
-```
-VITE_API_URL=https://your-backend-url.onrender.com/api/v1
-```
-
-### ✅ Your frontend is live at:
-- Vercel provides URL automatically
+### Architecture on Render:
+- **Web Service (`water-crisis-prediction-platform`)**:
+  - Runtime: Python 3.11
+  - Build Command: `pip install -r backend/requirements.txt`
+  - Start Command: `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- **Static Site (`water-crisis-platform-frontend`)**:
+  - Runtime: Node.js 18+
+  - Build Command: `cd frontend && npm install && npm run build`
+  - Publish Directory: `frontend/dist`
+  - Rewrite Rule: `/* -> /index.html` (SPA routing)
 
 ---
 
-## **Option 4: Heroku (Free Alternative)**
+### Environment Variables Matrix
 
-### Step 1: Install Heroku CLI
+#### Backend Web Service (`Render`):
+| Variable | Value / Format | Purpose |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | `postgresql://...` or `sqlite:///./water_crisis.db` | Main relational database |
+| `JWT_SECRET_KEY` | `64-character random hex string` | Signs authentication tokens |
+| `JWT_ALGORITHM` | `HS256` | JWT signing algorithm |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Access token lifespan |
+| `CORS_ORIGINS` | `https://water-crisis-platform-frontend.onrender.com,http://localhost:5173` | Allowed origins |
+| `DEBUG` | `False` | Disables debug stack traces in production |
+| `GROQ_API_KEY` | *(Optional)* `gsk_...` | Enables free ultra-fast Llama 3.3 70B AI chat |
+| `GEMINI_API_KEY` | *(Optional)* `AIzaSy...` | Enables Google Gemini 1.5 Flash AI chat |
+| `OPENAI_API_KEY` | *(Optional)* `sk-...` | Enables OpenAI GPT-4o-mini AI chat |
+
+#### Frontend Static Site (`Render`):
+| Variable | Value | Purpose |
+| :--- | :--- | :--- |
+| `VITE_API_URL` | `https://water-crisis-prediction-platform-1.onrender.com/api/v1` | Backend API base URL |
+
+---
+
+## 2. Docker & Multi-Container Deployment
+
+To deploy on a Virtual Private Server (AWS EC2, DigitalOcean Droplet, Linode) using Docker Compose:
 
 ```bash
-curl https://cli-assets.heroku.com/install-ubuntu.sh | sh
-heroku login
+# 1. Clone repository
+git clone https://github.com/krishnasundari/water-crisis-prediction-platform.git
+cd water-crisis-prediction-platform
+
+# 2. Configure environment file
+cp backend/.env.example backend/.env
+
+# 3. Build and launch all containers
+docker-compose up --build -d
+
+# 4. Check container health
+docker-compose ps
 ```
 
-### Step 2: Create Heroku Apps
+This boots:
+- **Frontend**: Nginx-served static React bundle on port `80`/`443`
+- **Backend**: FastAPI with Gunicorn workers on port `8000`
+- **PostgreSQL**: Relational database on port `5432`
+- **Redis**: Caching service on port `6379`
 
+---
+
+## 3. Local Development Setup
+
+### Backend:
 ```bash
-heroku create water-crisis-backend
-heroku create water-crisis-frontend
-
-# Add PostgreSQL addon
-heroku addons:create heroku-postgresql:hobby-dev --app water-crisis-backend
-
-# Add Redis addon
-heroku addons:create heroku-redis:premium-0 --app water-crisis-backend
-```
-
-### Step 3: Deploy
-
-```bash
-# Backend
 cd backend
-git push heroku main
+python -m venv venv
 
-# Frontend
-cd ../frontend
-git push heroku main
-```
-
-### ✅ Your apps are live at:
-- Backend: https://water-crisis-backend.herokuapp.com
-- Frontend: https://water-crisis-frontend.herokuapp.com
-
----
-
-## **Option 5: AWS (Most Scalable)**
-
-### Step 1: Create AWS Account
-- Go to https://aws.amazon.com
-- Sign up for free tier
-
-### Step 2: Create RDS Database
-```bash
-# Using AWS Console
-1. RDS → Databases → Create Database
-2. PostgreSQL, Free tier, db identifier: water-crisis-db
-3. Note connection details
-```
-
-### Step 3: Create ElastiCache (Redis)
-```bash
-# Using AWS Console
-1. ElastiCache → Clusters → Create
-2. Engine: Redis, Cache node type: cache.t3.micro
-3. Note endpoint
-```
-
-### Step 4: Deploy Backend on EC2
-
-```bash
-# Launch EC2 instance (Ubuntu 22.04)
-# SSH into instance
-
-sudo apt update
-sudo apt install python3-pip python3-venv git
-git clone https://github.com/YOUR_REPO/water-crisis-platform.git
-
-cd water-crisis-platform/backend
-python3 -m venv venv
+# Windows
+venv\Scripts\activate
+# Linux / macOS
 source venv/bin/activate
+
 pip install -r requirements.txt
-
-# Create .env with RDS and ElastiCache details
-cat > .env << 'EOF'
-DATABASE_URL=postgresql://user:pass@rds-endpoint:5432/water_crisis_db
-REDIS_URL=redis://redis-endpoint:6379/0
-JWT_SECRET_KEY=your-secret
-DEBUG=False
-EOF
-
-# Start with Gunicorn
-gunicorn app.main:app --workers 4 --bind 0.0.0.0:8000 &
+python -m uvicorn app.main:app --reload --port 8000
 ```
+Backend runs at `http://localhost:8000`.
 
-### Step 5: Deploy Frontend on S3 + CloudFront
-
+### Frontend:
 ```bash
-# Build
 cd frontend
-npm run build
-
-# Upload to S3
-aws s3 sync dist/ s3://water-crisis-frontend/ --delete
-
-# Create CloudFront distribution pointing to S3
-
-# Get URL: https://your-distribution-id.cloudfront.net
+npm install
+npm run dev
 ```
-
-### ✅ AWS Deployment Complete!
-
----
-
-## 📋 Quick Comparison
-
-| Platform | Cost | Difficulty | Free Tier |
-|----------|------|-----------|-----------|
-| Render | $7+/mo | Easy | Yes (limited) |
-| Railway | $5+/mo | Easy | Yes |
-| Vercel | Free | Easy | ✅ |
-| Heroku | Paid | Medium | No (free tier ended) |
-| AWS | Pay-as-you-go | Hard | ✅ (12 months) |
-| DigitalOcean | $4+/mo | Medium | ✅ ($200 credit) |
+Frontend runs at `http://localhost:5173`.
 
 ---
 
-## 🔄 Continuous Deployment
+## 4. Operational Runbooks & Health Verification
 
-### GitHub Actions (Auto-deploy on push)
-
-Create `.github/workflows/deploy.yml`:
-
-```yaml
-name: Deploy
-
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v2
-    
-    - name: Deploy to Render
-      run: |
-        curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }} \
-          -H "Content-Type: application/json"
-```
-
-Configure deploy hooks from Render dashboard.
-
----
-
-## 🆘 Common Issues During Deployment
-
-### "ModuleNotFoundError"
+### Verifying Service Heartbeat:
 ```bash
-# Ensure requirements.txt is in backend directory
-# Update build command: pip install -r backend/requirements.txt
+curl -i https://water-crisis-prediction-platform-1.onrender.com/health
+```
+Expected output:
+```json
+{"status":"healthy","version":"1.0.0","debug":false}
 ```
 
-### "Database connection failed"
+### Triggering Manual Ingestion Sync (Admin):
 ```bash
-# Check DATABASE_URL format
-# Ensure PostgreSQL is running
-# Verify credentials in .env
+curl -X POST https://water-crisis-prediction-platform-1.onrender.com/api/v1/sync/run \
+  -H "Authorization: Bearer <ADMIN_JWT_TOKEN>"
 ```
 
-### "CORS errors"
+### Running Automated Test Suite:
 ```bash
-# Update CORS_ORIGINS in backend .env
-# Add frontend URL: https://your-frontend.onrender.com
+# Backend pytest suite (133 tests)
+cd backend
+python -m pytest
+
+# Frontend vitest suite (11 tests)
+cd frontend
+npm run test
 ```
-
-### "Frontend shows blank page"
-```bash
-# Check browser console (F12)
-# Ensure VITE_API_URL points to correct backend
-# Rebuild: npm run build
-```
-
----
-
-## 📞 Get Your Final Links
-
-After deployment:
-
-1. **Note your Backend URL** (e.g., https://water-crisis-backend.onrender.com)
-2. **Note your Frontend URL** (e.g., https://water-crisis-frontend.onrender.com)
-3. **Test the application**:
-   - Visit frontend URL
-   - Try login with sample credentials
-   - Create sample data
-
----
-
-## 🎉 Congratulations!
-
-Your **Water Crisis Prediction & Management Platform** is now **LIVE** and accessible from anywhere!
-
-### Next Steps:
-1. ✅ Share the links with stakeholders
-2. ✅ Add real water data to the database
-3. ✅ Train ML models with actual data
-4. ✅ Configure email notifications
-5. ✅ Set up daily backups
-6. ✅ Monitor application health
-
----
-
-**Questions?** Check SETUP.md for detailed troubleshooting.
